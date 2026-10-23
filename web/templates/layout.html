@@ -13,6 +13,7 @@
     <nav class="main">
       {{if index $.Can "users.manage"}}<a href="/admin/benutzer">Benutzer</a>{{end}}
       {{if index $.Can "roles.manage"}}<a href="/admin/rollen">Rollen</a>{{end}}
+      {{if index $.Can "tables.define"}}<a href="/admin/tabellen">Tabellen</a>{{end}}
     </nav>
     <form class="logout" method="post" action="/logout">
       <span>{{.Username}}</span>

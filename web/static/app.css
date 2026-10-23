@@ -194,3 +194,8 @@ legend { font-weight: 600; padding: 0 4px; }
 form.row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 select { padding: 8px 10px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
 .badge:not([class*="badge-"]) { background: var(--border); }
+input.num { width: 6em; }
+table.list td input:not([type=checkbox]) { margin: 0; padding: 6px 8px; }
+label select { display: block; width: 100%; margin-top: 6px; }
+td.actions form { display: inline-block; }
+form.row label.check { margin: 0; }
