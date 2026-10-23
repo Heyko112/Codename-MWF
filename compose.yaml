@@ -5,7 +5,8 @@ services:
     environment:
       DB_HOST: db
     ports:
-      - "${APP_PORT:-8080}:8080"
+      # Nur auf diesem Rechner erreichbar. Für Zugriff aus dem Netzwerk APP_BIND=0.0.0.0 setzen (dann mit HTTPS).
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"
     depends_on:
       db:
         condition: service_healthy
