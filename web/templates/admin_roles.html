@@ -1,0 +1,43 @@
+{{define "title"}}Rollen · MWF{{end}}
+{{define "content"}}
+<h1>Rollen</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+<div class="table-wrap">
+<table class="list">
+  <thead><tr><th>Rolle</th><th>Rechte</th><th>liegt in</th><th>enthält</th><th>Mitglieder</th></tr></thead>
+  <tbody>
+  {{range .Roles}}
+    <tr>
+      <td><a href="/admin/rollen/{{.ID}}">{{.Name}}</a>
+        {{if .System}}<span class="badge">System</span>{{end}}
+        {{if .Hidden}}<span class="badge">versteckt</span>{{end}}
+        {{with .Description}}<br><span class="muted">{{.}}</span>{{end}}</td>
+      <td>{{range $i, $p := .PermLabels}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">keine</span>{{end}}</td>
+      <td>{{range $i, $p := .Parents}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">–</span>{{end}}</td>
+      <td>{{range $i, $p := .Children}}{{if $i}}, {{end}}{{$p}}{{else}}<span class="muted">–</span>{{end}}</td>
+      <td>{{.MemberCount}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="card narrow-left">
+  <h2>Neue Rolle anlegen</h2>
+  {{with .Form}}{{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}{{end}}
+  <form method="post" action="/admin/rollen">
+    <label>Name
+      <input name="name" required maxlength="64" autocomplete="off" value="{{with .Form}}{{.Name}}{{end}}">
+    </label>
+    <label>Beschreibung (optional)
+      <input name="description" maxlength="255" autocomplete="off" value="{{with .Form}}{{.Description}}{{end}}">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="is_hidden" {{with .Form}}{{if .IsHidden}}checked{{end}}{{end}}> Versteckt (Service-Rolle, nur für Berechtigungen)
+    </label>
+    <button type="submit">Rolle anlegen</button>
+  </form>
+  <p class="hint">Liegt Rolle B in Rolle A, sind alle Mitglieder von B automatisch auch Mitglieder von A und erben deren Rechte. Rechte kommen nur dazu, nie weg.</p>
+</div>
+{{end}}

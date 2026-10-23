@@ -1,0 +1,79 @@
+{{define "title"}}{{.Role.Name}} · Rollen · MWF{{end}}
+{{define "content"}}
+<p><a href="/admin/rollen">← Alle Rollen</a></p>
+<h1>{{.Role.Name}}
+  {{if .Role.System}}<span class="badge">System</span>{{end}}
+  {{if .Role.Hidden}}<span class="badge">versteckt</span>{{end}}</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+<div class="grid">
+<div class="card">
+  <h2>Stammdaten</h2>
+  <form method="post" action="/admin/rollen/{{.Role.ID}}">
+    <label>Name
+      <input name="name" required maxlength="64" autocomplete="off" value="{{.Role.Name}}" {{if .Role.System}}readonly{{end}}>
+    </label>
+    <label>Beschreibung
+      <input name="description" maxlength="255" autocomplete="off" value="{{.Role.Description}}">
+    </label>
+    <label class="check"><input type="checkbox" name="is_hidden" {{if .Role.Hidden}}checked{{end}}> Versteckt</label>
+    <button type="submit">Speichern</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Rechte</h2>
+  {{if .Role.System}}
+  <p>„Administratoren“ hat immer alle Rechte.</p>
+  {{else}}
+  <form method="post" action="/admin/rollen/{{.Role.ID}}/rechte">
+    {{range .AllPerms}}
+    <label class="check"><input type="checkbox" name="perm" value="{{.Code}}" {{if index $.Has .Code}}checked{{end}}> {{.Label}}</label>
+    {{end}}
+    <button type="submit">Rechte speichern</button>
+  </form>
+  {{end}}
+</div>
+</div>
+
+<div class="grid">
+<div class="card">
+  <h2>Enthaltene Rollen</h2>
+  <p class="hint">Mitglieder dieser Rollen gelten auch als Mitglieder von „{{.Role.Name}}“ und erben ihre Rechte. Höchstens {{.MaxDepth}} Ebenen, keine Kreise.</p>
+  {{range .Children}}
+  <form class="row" method="post" action="/admin/rollen/{{$.Role.ID}}/enthaelt/{{.ID}}/entfernen">
+    <a href="/admin/rollen/{{.ID}}">{{.Name}}</a>
+    <button type="submit" class="small danger">Entfernen</button>
+  </form>
+  {{else}}<p class="muted">Keine.</p>{{end}}
+  {{if .Candidates}}
+  <form class="row" method="post" action="/admin/rollen/{{.Role.ID}}/enthaelt">
+    <select name="child_id" required>
+      <option value="">Rolle wählen …</option>
+      {{range .Candidates}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <button type="submit" class="small">Hinzufügen</button>
+  </form>
+  {{else}}<p class="hint">Keine weitere Rolle passt hier hinein, ohne einen Kreis oder mehr als {{.MaxDepth}} Ebenen zu erzeugen.</p>
+  {{end}}
+  {{with .Parents}}
+  <h3>Liegt selbst in</h3>
+  <ul>{{range .}}<li><a href="/admin/rollen/{{.ID}}">{{.Name}}</a></li>{{end}}</ul>
+  {{end}}
+</div>
+
+<div class="card">
+  <h2>Direkte Mitglieder</h2>
+  {{with .Members}}
+  <ul>{{range .}}<li><a href="/admin/benutzer/{{.ID}}">{{.Username}}</a>{{if .IsHidden}} <span class="muted">(versteckt)</span>{{end}}</li>{{end}}</ul>
+  {{else}}<p class="muted">Keine.</p>{{end}}
+  <p class="hint">Mitglieder weist du beim Benutzer zu.</p>
+</div>
+</div>
+
+{{if not .Role.System}}
+<form method="post" action="/admin/rollen/{{.Role.ID}}/loeschen">
+  <button type="submit" class="danger">Rolle löschen</button>
+</form>
+{{end}}
+{{end}}

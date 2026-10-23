@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/Heyko112/codename-mwf/internal/auth"
+	"github.com/Heyko112/codename-mwf/internal/authz"
 	"github.com/Heyko112/codename-mwf/internal/config"
 	"github.com/Heyko112/codename-mwf/internal/db"
 )
@@ -21,7 +22,7 @@ import (
 //	docker compose exec app /server create-user <benutzername> [Anzeigename]
 //
 // Das Passwort wird interaktiv abgefragt (oder aus stdin gelesen) und nie als Argument übergeben.
-// Benutzer, die so angelegt werden, sind Admins. Weitere Benutzer legt ein Admin in der Oberfläche an.
+// Benutzer, die so angelegt werden, kommen in die Rolle „Administratoren“. Weitere Benutzer legt ein Admin in der Oberfläche an.
 func createUser(args []string) error {
 	if len(args) < 1 || len(args) > 2 {
 		return errors.New("Aufruf: create-user <benutzername> [Anzeigename]")
@@ -61,9 +62,17 @@ func createUser(args []string) error {
 	if err != nil {
 		return err
 	}
-	id, err := auth.NewStore(database).Create(ctx, username, displayName, hash, true)
+	id, err := auth.NewStore(database).Create(ctx, username, displayName, hash, false, false)
 	if err != nil {
 		return fmt.Errorf("Benutzer anlegen fehlgeschlagen: %w", err)
+	}
+	roles := authz.NewStore(database)
+	adminRole, err := roles.SystemRoleID(ctx)
+	if err != nil {
+		return err
+	}
+	if err := roles.AddMember(ctx, adminRole, id); err != nil {
+		return err
 	}
 	fmt.Printf("Admin %q angelegt (ID %d). 2FA wird beim ersten Login eingerichtet.\n", username, id)
 	return nil

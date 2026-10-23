@@ -40,6 +40,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	// Für die Navigation: welche Rechte hat der angemeldete Benutzer?
+	if m, ok := data.(map[string]any); ok {
+		can := map[string]bool{}
+		if _, acc := CurrentAccess(r.Context()); acc != nil {
+			for p := range acc.Permissions {
+				can[p] = true
+			}
+		}
+		m["Can"] = can
+	}
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", data); err != nil {
 		slog.Error("Template-Fehler", "id", RequestIDFrom(r.Context()), "seite", page, "fehler", err)

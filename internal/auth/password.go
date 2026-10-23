@@ -67,6 +67,15 @@ func VerifyPassword(password, encoded string) (bool, error) {
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
 
+// UnusablePasswordHash liefert einen Hash zu einem zufälligen, nie bekannten Passwort (für Service-User).
+func UnusablePasswordHash() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return HashPassword(base64.RawStdEncoding.EncodeToString(b))
+}
+
 // dummyHash wird geprüft, wenn es den Benutzer nicht gibt, damit die Antwortzeit nichts verrät.
 var dummyHash, _ = HashPassword("dummy-password-for-timing")
 

@@ -21,7 +21,8 @@ type User struct {
 	ID           int64
 	Username     string
 	DisplayName  string
-	IsAdmin      bool
+	IsHidden     bool // taucht nicht in Auswahllisten auf
+	IsService    bool // technisches Konto, kein Web-Login
 	PasswordHash string
 	TOTPSecret   []byte // verschlüsselt
 	TOTPEnabled  bool
@@ -46,14 +47,14 @@ type Store struct {
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
-const userColumns = `id, username, display_name, is_admin, password_hash, totp_secret, totp_enabled,
+const userColumns = `id, username, display_name, is_hidden, is_service, password_hash, totp_secret, totp_enabled,
 	totp_last_step, is_active, failed_logins, locked_until, last_login_at`
 
 type scanner interface{ Scan(dest ...any) error }
 
 func scanUser(row scanner) (*User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.IsAdmin, &u.PasswordHash, &u.TOTPSecret, &u.TOTPEnabled,
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.IsHidden, &u.IsService, &u.PasswordHash, &u.TOTPSecret, &u.TOTPEnabled,
 		&u.TOTPLastStep, &u.IsActive, &u.FailedLogins, &u.LockedUntil, &u.LastLoginAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -73,10 +74,10 @@ func (s *Store) ByID(ctx context.Context, id int64) (*User, error) {
 var ErrUsernameTaken = errors.New("Benutzername ist bereits vergeben")
 
 // Create legt einen Benutzer an. 2FA wird beim ersten Login eingerichtet.
-func (s *Store) Create(ctx context.Context, username, displayName, passwordHash string, isAdmin bool) (int64, error) {
+func (s *Store) Create(ctx context.Context, username, displayName, passwordHash string, hidden, service bool) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO users (username, display_name, password_hash, is_admin) VALUES (?, ?, ?, ?)`,
-		username, displayName, passwordHash, isAdmin)
+		`INSERT INTO users (username, display_name, password_hash, is_hidden, is_service) VALUES (?, ?, ?, ?, ?)`,
+		username, displayName, passwordHash, hidden, service)
 	var me *mysql.MySQLError
 	if errors.As(err, &me) && me.Number == 1062 {
 		return 0, ErrUsernameTaken
@@ -103,6 +104,13 @@ func (s *Store) List(ctx context.Context) ([]*User, error) {
 		users = append(users, u)
 	}
 	return users, rows.Err()
+}
+
+// SetFlags ändert Anzeigename, „versteckt“ und „Service-User“.
+func (s *Store) SetFlags(ctx context.Context, id int64, displayName string, hidden, service bool) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE users SET display_name = ?, is_hidden = ?, is_service = ? WHERE id = ?`, displayName, hidden, service, id)
+	return err
 }
 
 // SetActive sperrt oder entsperrt ein Konto. Beim Entsperren wird auch die Fehlversuch-Sperre aufgehoben.

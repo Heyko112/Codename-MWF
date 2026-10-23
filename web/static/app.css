@@ -186,3 +186,11 @@ label.check input { display: inline; width: auto; margin: 0; }
   .badge-off { background: #3a1d1f; color: #ffb4b4; }
   .badge-warn { background: #3a2f14; color: #f5d98b; }
 }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.grid .card, .content > .card { margin-bottom: 16px; }
+fieldset { border: 1px solid var(--border); border-radius: 6px; margin: 0 0 16px; padding: 8px 12px 0; }
+legend { font-weight: 600; padding: 0 4px; }
+form.row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+select { padding: 8px 10px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.badge:not([class*="badge-"]) { background: var(--border); }

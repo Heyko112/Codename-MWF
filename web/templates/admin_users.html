@@ -1,7 +1,11 @@
-{{define "title"}}Benutzerverwaltung · MWF{{end}}
+{{define "title"}}Benutzer · MWF{{end}}
 {{define "content"}}
-<h1>Benutzerverwaltung</h1>
+<h1>Benutzer</h1>
 {{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+<p class="hint">
+  {{if .ShowAll}}Versteckte Benutzer werden angezeigt. <a href="/admin/benutzer">Ausblenden</a>
+  {{else if .HiddenCount}}{{.HiddenCount}} versteckte Benutzer ausgeblendet. <a href="/admin/benutzer?alle=1">Anzeigen</a>{{end}}
+</p>
 
 <div class="table-wrap">
 <table class="list">
@@ -9,7 +13,7 @@
     <tr>
       <th>Benutzername</th>
       <th>Anzeigename</th>
-      <th>Rolle</th>
+      <th>Rollen</th>
       <th>2FA</th>
       <th>Status</th>
       <th>Letzter Login</th>
@@ -20,10 +24,12 @@
   {{$me := .User}}
   {{range .Users}}
     <tr>
-      <td>{{.Username}}</td>
+      <td><a href="/admin/benutzer/{{.ID}}">{{.Username}}</a>
+        {{if .IsService}}<span class="badge">Service</span>{{end}}
+        {{if .IsHidden}}<span class="badge">versteckt</span>{{end}}</td>
       <td>{{.DisplayName}}</td>
-      <td>{{if .IsAdmin}}Admin{{else}}Benutzer{{end}}</td>
-      <td>{{if .TOTPEnabled}}eingerichtet{{else}}<span class="muted">noch nicht</span>{{end}}</td>
+      <td>{{range $i, $r := .Roles}}{{if $i}}, {{end}}{{$r}}{{else}}<span class="muted">keine</span>{{end}}</td>
+      <td>{{if .IsService}}<span class="muted">–</span>{{else if .TOTPEnabled}}eingerichtet{{else}}<span class="muted">noch nicht</span>{{end}}</td>
       <td>
         {{if not .IsActive}}<span class="badge badge-off">gesperrt</span>
         {{else if .LockedNow}}<span class="badge badge-warn">Fehlversuche</span>
@@ -55,11 +61,20 @@
     <label>Anzeigename (optional)
       <input name="display_name" maxlength="128" autocomplete="off" value="{{with .Form}}{{.DisplayName}}{{end}}">
     </label>
-    <label>Start-Passwort (mindestens {{.MinLength}} Zeichen)
-      <input name="password" type="password" required minlength="{{.MinLength}}" autocomplete="new-password">
+    <label>Start-Passwort (mindestens {{.MinLength}} Zeichen, bei Service-User leer lassen)
+      <input name="password" type="password" minlength="{{.MinLength}}" autocomplete="new-password">
+    </label>
+    <fieldset>
+      <legend>Rollen</legend>
+      {{range .AllRoles}}
+      <label class="check"><input type="checkbox" name="role" value="{{.ID}}" {{if index $.Selected .ID}}checked{{end}}> {{.Name}}{{if .Hidden}} <span class="muted">(versteckt)</span>{{end}}</label>
+      {{end}}
+    </fieldset>
+    <label class="check">
+      <input type="checkbox" name="is_hidden" {{with .Form}}{{if .IsHidden}}checked{{end}}{{end}}> Versteckt (taucht nicht in Listen auf)
     </label>
     <label class="check">
-      <input type="checkbox" name="is_admin" {{with .Form}}{{if .IsAdmin}}checked{{end}}{{end}}> Admin (darf Benutzer verwalten)
+      <input type="checkbox" name="is_service" {{with .Form}}{{if .IsService}}checked{{end}}{{end}}> Service-User (technisches Konto, kein Web-Login)
     </label>
     <button type="submit">Benutzer anlegen</button>
   </form>

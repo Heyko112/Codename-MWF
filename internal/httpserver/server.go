@@ -12,6 +12,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/Heyko112/codename-mwf/internal/auth"
+	"github.com/Heyko112/codename-mwf/internal/authz"
 )
 
 // Server bündelt die Abhängigkeiten der Handler.
@@ -21,11 +22,12 @@ type Server struct {
 	templates Templates
 	static    fs.FS
 	users     *auth.Store
+	roles     *authz.Store
 	secrets   *auth.SecretBox
 }
 
 func New(db *sql.DB, sessions *scs.SessionManager, templates Templates, static fs.FS, secrets *auth.SecretBox) *Server {
-	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), secrets: secrets}
+	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), roles: authz.NewStore(db), secrets: secrets}
 }
 
 // Handler registriert alle Routen und legt die Middleware-Kette darum.
@@ -44,10 +46,24 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("GET /login/2fa/einrichten", s.totpSetupForm)
 	pages.HandleFunc("POST /login/2fa/einrichten", s.totpSetupSubmit)
 	pages.HandleFunc("POST /logout", s.logout)
-	pages.HandleFunc("GET /admin/benutzer", s.requireAdmin(s.adminUsers))
-	pages.HandleFunc("POST /admin/benutzer", s.requireAdmin(s.adminCreateUser))
-	pages.HandleFunc("POST /admin/benutzer/{id}/sperren", s.requireAdmin(s.adminLockUser))
-	pages.HandleFunc("POST /admin/benutzer/{id}/entsperren", s.requireAdmin(s.adminUnlockUser))
+	users := func(h http.HandlerFunc) http.HandlerFunc { return s.requirePerm(authz.PermUsersManage, h) }
+	pages.HandleFunc("GET /admin/benutzer", users(s.adminUsers))
+	pages.HandleFunc("POST /admin/benutzer", users(s.adminCreateUser))
+	pages.HandleFunc("GET /admin/benutzer/{id}", users(s.adminUserDetail))
+	pages.HandleFunc("POST /admin/benutzer/{id}", users(s.adminUpdateUser))
+	pages.HandleFunc("POST /admin/benutzer/{id}/rollen", users(s.adminSetUserRoles))
+	pages.HandleFunc("POST /admin/benutzer/{id}/sperren", users(s.adminLockUser))
+	pages.HandleFunc("POST /admin/benutzer/{id}/entsperren", users(s.adminUnlockUser))
+
+	roles := func(h http.HandlerFunc) http.HandlerFunc { return s.requirePerm(authz.PermRolesManage, h) }
+	pages.HandleFunc("GET /admin/rollen", roles(s.adminRoles))
+	pages.HandleFunc("POST /admin/rollen", roles(s.adminCreateRole))
+	pages.HandleFunc("GET /admin/rollen/{id}", roles(s.adminRoleDetail))
+	pages.HandleFunc("POST /admin/rollen/{id}", roles(s.adminUpdateRole))
+	pages.HandleFunc("POST /admin/rollen/{id}/rechte", roles(s.adminSetRolePerms))
+	pages.HandleFunc("POST /admin/rollen/{id}/enthaelt", roles(s.adminAddInclude))
+	pages.HandleFunc("POST /admin/rollen/{id}/enthaelt/{child}/entfernen", roles(s.adminRemoveInclude))
+	pages.HandleFunc("POST /admin/rollen/{id}/loeschen", roles(s.adminDeleteRole))
 	pages.HandleFunc("/", s.notFound)
 	mux.Handle("/", s.sessions.LoadAndSave(pages))
 
