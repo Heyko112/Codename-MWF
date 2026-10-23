@@ -21,6 +21,9 @@ const (
 	argonSaltLen = 16
 )
 
+// MinPasswordLen ist die Mindestlänge für neue Passwörter.
+const MinPasswordLen = 12
+
 var errBadHash = errors.New("ungültiges Hash-Format")
 
 // HashPassword erzeugt einen Argon2id-Hash im PHC-Format.

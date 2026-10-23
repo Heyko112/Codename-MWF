@@ -18,7 +18,13 @@ Die Datenbank liegt im Volume `db-data` und bleibt bei Neustarts erhalten.
 docker compose exec app /server create-user <benutzername> "<Anzeigename>"
 ```
 
-Das Passwort (mindestens 12 Zeichen) wird abgefragt. Danach unter http://localhost:8080 anmelden. Beim ersten Login wird die 2FA mit einer Authenticator-App eingerichtet, sie ist Pflicht.
+Das Passwort (mindestens 12 Zeichen) wird abgefragt. So angelegte Benutzer sind Admins. Danach unter http://localhost:8080 anmelden. Beim ersten Login wird die 2FA mit einer Authenticator-App eingerichtet, sie ist Pflicht.
+
+## Benutzerverwaltung
+
+Admins finden oben im Menü die **Benutzerverwaltung** (`/admin/benutzer`): Benutzer anlegen (optional als Admin), sperren und entsperren. Entsperren hebt auch eine Sperre nach Fehlversuchen auf. Gesperrte Benutzer werden sofort abgemeldet. Jede Aktion landet mit dem handelnden Admin im `audit_log`.
+
+Die App ist standardmäßig nur auf dem eigenen Rechner erreichbar (`APP_BIND=127.0.0.1`). Zeiten werden in `Europe/Berlin` angezeigt (änderbar über `TZ` in der `.env`).
 
 ## Login und Sicherheit
 

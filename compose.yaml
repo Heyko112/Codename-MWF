@@ -4,6 +4,7 @@ services:
     env_file: .env
     environment:
       DB_HOST: db
+      TZ: ${TZ:-Europe/Berlin}
     ports:
       # Nur auf diesem Rechner erreichbar. Für Zugriff aus dem Netzwerk APP_BIND=0.0.0.0 setzen (dann mit HTTPS).
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8080"

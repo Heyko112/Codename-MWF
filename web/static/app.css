@@ -133,3 +133,56 @@ button.link {
 }
 
 .secret { word-break: break-all; }
+
+nav.main { display: flex; gap: 16px; margin-right: auto; margin-left: 24px; }
+nav.main a { text-decoration: none; }
+
+.notice {
+  padding: 10px 12px;
+  color: #14532d;
+  background: #e3f6e8;
+  border-radius: 6px;
+}
+
+.table-wrap { overflow-x: auto; margin-bottom: 24px; }
+
+table.list {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+table.list th, table.list td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+table.list th { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+table.list tr:last-child td { border-bottom: 0; }
+td.actions form { margin: 0; }
+
+.muted { color: var(--muted); }
+
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 0.85rem; }
+.badge-on { background: #e3f6e8; color: #14532d; }
+.badge-off { background: #fde8e8; color: #a4161a; }
+.badge-warn { background: #fdf3d8; color: #7a5200; }
+
+button.small { padding: 6px 10px; font-size: 0.9rem; }
+button.danger { background: #c0392b; }
+
+.narrow-left { max-width: 480px; }
+.card h2 { margin-top: 0; font-size: 1.2rem; }
+
+label.check { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+label.check input { display: inline; width: auto; margin: 0; }
+
+@media (prefers-color-scheme: dark) {
+  .notice, .badge-on { background: #16301f; color: #a7e8bd; }
+  .badge-off { background: #3a1d1f; color: #ffb4b4; }
+  .badge-warn { background: #3a2f14; color: #f5d98b; }
+}
