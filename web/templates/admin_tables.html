@@ -1,0 +1,38 @@
+{{define "title"}}Tabellen · MWF{{end}}
+{{define "content"}}
+<h1>Tabellen</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+{{if .Tables}}
+<div class="table-wrap">
+<table class="list">
+  <thead><tr><th>Tabelle</th><th>Beschreibung</th><th>Spalten</th><th>Datensätze</th></tr></thead>
+  <tbody>
+  {{range .Tables}}
+    <tr>
+      <td><a href="/admin/tabellen/{{.ID}}">{{.Name}}</a></td>
+      <td>{{with .Description}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
+      <td>{{.ColumnCount}}</td>
+      <td>{{.RowCount}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}<p class="muted">Es gibt noch keine Tabellen.</p>{{end}}
+
+<div class="card narrow-left">
+  <h2>Neue Tabelle anlegen</h2>
+  {{with .Form}}{{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}{{end}}
+  <form method="post" action="/admin/tabellen">
+    <label>Name
+      <input name="name" required maxlength="64" autocomplete="off" value="{{with .Form}}{{.Name}}{{end}}">
+    </label>
+    <label>Beschreibung (optional)
+      <input name="description" maxlength="255" autocomplete="off" value="{{with .Form}}{{.Description}}{{end}}">
+    </label>
+    <button type="submit">Tabelle anlegen</button>
+  </form>
+  <p class="hint">Der Name ist nur die Beschriftung. Du kannst Tabellen und Spalten später umbenennen, ohne dass Daten oder Verknüpfungen verloren gehen.</p>
+</div>
+{{end}}

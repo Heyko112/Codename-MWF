@@ -13,6 +13,7 @@ import (
 
 	"github.com/Heyko112/codename-mwf/internal/auth"
 	"github.com/Heyko112/codename-mwf/internal/authz"
+	"github.com/Heyko112/codename-mwf/internal/tables"
 )
 
 // Server bündelt die Abhängigkeiten der Handler.
@@ -23,11 +24,12 @@ type Server struct {
 	static    fs.FS
 	users     *auth.Store
 	roles     *authz.Store
+	tables    *tables.Store
 	secrets   *auth.SecretBox
 }
 
 func New(db *sql.DB, sessions *scs.SessionManager, templates Templates, static fs.FS, secrets *auth.SecretBox) *Server {
-	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), roles: authz.NewStore(db), secrets: secrets}
+	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), roles: authz.NewStore(db), tables: tables.NewStore(db), secrets: secrets}
 }
 
 // Handler registriert alle Routen und legt die Middleware-Kette darum.
@@ -64,6 +66,18 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("POST /admin/rollen/{id}/enthaelt", roles(s.adminAddInclude))
 	pages.HandleFunc("POST /admin/rollen/{id}/enthaelt/{child}/entfernen", roles(s.adminRemoveInclude))
 	pages.HandleFunc("POST /admin/rollen/{id}/loeschen", roles(s.adminDeleteRole))
+
+	tbl := func(h http.HandlerFunc) http.HandlerFunc { return s.requirePerm(authz.PermTablesDefine, h) }
+	pages.HandleFunc("GET /admin/tabellen", tbl(s.adminTables))
+	pages.HandleFunc("POST /admin/tabellen", tbl(s.adminCreateTable))
+	pages.HandleFunc("GET /admin/tabellen/{id}", tbl(s.adminTableDetail))
+	pages.HandleFunc("POST /admin/tabellen/{id}", tbl(s.adminUpdateTable))
+	pages.HandleFunc("POST /admin/tabellen/{id}/loeschen", tbl(s.adminDeleteTable))
+	pages.HandleFunc("POST /admin/tabellen/{id}/spalten", tbl(s.adminAddColumn))
+	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}", tbl(s.adminUpdateColumn))
+	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/hoch", tbl(s.adminMoveColumnUp))
+	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/runter", tbl(s.adminMoveColumnDown))
+	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/loeschen", tbl(s.adminDeleteColumn))
 	pages.HandleFunc("/", s.notFound)
 	mux.Handle("/", s.sessions.LoadAndSave(pages))
 

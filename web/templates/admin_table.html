@@ -1,0 +1,83 @@
+{{define "title"}}{{.Table.Name}} · Tabellen · MWF{{end}}
+{{define "content"}}
+<p><a href="/admin/tabellen">← Alle Tabellen</a></p>
+<h1>{{.Table.Name}}</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+<p class="muted">{{.Table.RowCount}} Datensätze</p>
+
+<h2>Spalten</h2>
+{{if .Table.Columns}}
+<div class="table-wrap">
+<table class="list">
+  <thead><tr><th>Name</th><th>Typ</th><th>Länge</th><th>Pflicht</th><th></th><th>Reihenfolge</th><th>Löschen</th></tr></thead>
+  <tbody>
+  {{$t := .Table}}
+  {{range $i, $c := .Table.Columns}}
+    <tr>
+      <td><form id="col-{{.ID}}" method="post" action="/admin/tabellen/{{$t.ID}}/spalten/{{.ID}}"></form>
+        <input form="col-{{.ID}}" name="name" required maxlength="64" value="{{.Name}}" aria-label="Name"></td>
+      <td>{{.TypeLabel}}</td>
+      <td>{{if eq .Type "text"}}<input form="col-{{.ID}}" class="num" name="size" type="number" min="{{.Size}}" max="1000" value="{{.Size}}" aria-label="Länge">{{else}}<span class="muted">–</span>{{end}}</td>
+      <td><input form="col-{{.ID}}" type="checkbox" name="required" {{if .Required}}checked{{end}} aria-label="Pflichtfeld"></td>
+      <td><button form="col-{{.ID}}" type="submit" class="small">Speichern</button></td>
+      <td class="actions">
+        {{if $i}}<form method="post" action="/admin/tabellen/{{$t.ID}}/spalten/{{.ID}}/hoch"><button type="submit" class="small" aria-label="nach oben">↑</button></form>{{end}}
+        <form method="post" action="/admin/tabellen/{{$t.ID}}/spalten/{{.ID}}/runter"><button type="submit" class="small" aria-label="nach unten">↓</button></form>
+      </td>
+      <td><form class="row" method="post" action="/admin/tabellen/{{$t.ID}}/spalten/{{.ID}}/loeschen">
+        <label class="check"><input type="checkbox" name="confirm" required> wirklich</label>
+        <button type="submit" class="small danger">Löschen</button>
+      </form></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}<p class="muted">Noch keine Spalten.</p>{{end}}
+
+<div class="grid">
+<div class="card">
+  <h2>Spalte hinzufügen</h2>
+  <form method="post" action="/admin/tabellen/{{.Table.ID}}/spalten">
+    <label>Name
+      <input name="name" required maxlength="64" autocomplete="off">
+    </label>
+    <label>Typ
+      <select name="type" required>
+        {{range .Types}}<option value="{{.Code}}">{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <label>Länge bzw. Nachkommastellen (optional)
+      <input name="size" type="number" min="0" max="1000">
+    </label>
+    <label class="check"><input type="checkbox" name="required"> Pflichtfeld</label>
+    <button type="submit">Spalte hinzufügen</button>
+  </form>
+  <p class="hint">Text: maximale Länge 1 bis 1000, Standard 255. Dezimalzahl: 0 bis 6 Nachkommastellen, Standard 2. Bei Text lässt sich die Länge später nur vergrößern, der Typ selbst bleibt fest.</p>
+</div>
+
+<div class="card">
+  <h2>Tabelle</h2>
+  <form method="post" action="/admin/tabellen/{{.Table.ID}}">
+    <label>Name
+      <input name="name" required maxlength="64" autocomplete="off" value="{{.Table.Name}}">
+    </label>
+    <label>Beschreibung
+      <input name="description" maxlength="255" autocomplete="off" value="{{.Table.Description}}">
+    </label>
+    <button type="submit">Speichern</button>
+  </form>
+</div>
+</div>
+
+<div class="card narrow-left">
+  <h2>Tabelle löschen</h2>
+  <p>Löscht die Tabelle mit allen {{.Table.RowCount}} Datensätzen. Das lässt sich nicht rückgängig machen.</p>
+  <form method="post" action="/admin/tabellen/{{.Table.ID}}/loeschen">
+    <label>Zur Bestätigung den Namen „{{.Table.Name}}“ eintippen
+      <input name="confirm" required autocomplete="off">
+    </label>
+    <button type="submit" class="danger">Endgültig löschen</button>
+  </form>
+</div>
+{{end}}

@@ -32,6 +32,16 @@ Oben im Menü stehen **Benutzer** (`/admin/benutzer`) und **Rollen** (`/admin/ro
 - Nur Administratoren dürfen die Rolle „Administratoren“ vergeben oder verschachteln und Administratoren ändern oder sperren.
 - Entsperren hebt auch eine Sperre nach Fehlversuchen auf, gesperrte Benutzer werden sofort abgemeldet. Jede Aktion landet im `audit_log`.
 
+## Tabellen
+
+Mit dem Recht „Tabellen definieren“ erscheint oben **Tabellen** (`/admin/tabellen`). Dort legst du Tabellen an und gibst ihnen Spalten: Text (Länge 1–1000), Langtext, Ganzzahl, Dezimalzahl (0–6 Nachkommastellen), Datum, Datum und Uhrzeit, Ja/Nein.
+
+- Jede Tabelle ist eine echte MariaDB-Tabelle `dt_<ID>`, jede Spalte heißt `c_<ID>`. Die Namen in der Oberfläche sind nur Beschriftung, Umbenennen ändert nichts an der Struktur.
+- Jede Tabelle hat automatisch `id`, `created_at`, `created_by`, `updated_at`, `updated_by`.
+- Bei Text lässt sich die Länge nur vergrößern, der Typ einer Spalte bleibt fest. Die Reihenfolge der Spalten ist nur Anzeige.
+- Pflichtfelder prüft die App beim Speichern von Datensätzen (kommt in Schritt C).
+- Löschen einer Spalte oder Tabelle entfernt auch die Daten und muss bestätigt werden.
+
 Die App ist standardmäßig nur auf dem eigenen Rechner erreichbar (`APP_BIND=127.0.0.1`). Zeiten werden in `Europe/Berlin` angezeigt (änderbar über `TZ` in der `.env`).
 
 ## Login und Sicherheit
