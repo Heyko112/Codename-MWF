@@ -16,13 +16,12 @@ import (
 	"github.com/Heyko112/codename-mwf/internal/db"
 )
 
-const minPasswordLen = 12
-
 // createUser legt einen Benutzer an. Aufruf im Container:
 //
 //	docker compose exec app /server create-user <benutzername> [Anzeigename]
 //
 // Das Passwort wird interaktiv abgefragt (oder aus stdin gelesen) und nie als Argument übergeben.
+// Benutzer, die so angelegt werden, sind Admins. Weitere Benutzer legt ein Admin in der Oberfläche an.
 func createUser(args []string) error {
 	if len(args) < 1 || len(args) > 2 {
 		return errors.New("Aufruf: create-user <benutzername> [Anzeigename]")
@@ -40,8 +39,8 @@ func createUser(args []string) error {
 	if err != nil {
 		return err
 	}
-	if utf8.RuneCountInString(password) < minPasswordLen {
-		return fmt.Errorf("Passwort muss mindestens %d Zeichen lang sein", minPasswordLen)
+	if utf8.RuneCountInString(password) < auth.MinPasswordLen {
+		return fmt.Errorf("Passwort muss mindestens %d Zeichen lang sein", auth.MinPasswordLen)
 	}
 
 	cfg, err := config.Load()
@@ -62,11 +61,11 @@ func createUser(args []string) error {
 	if err != nil {
 		return err
 	}
-	id, err := auth.NewStore(database).Create(ctx, username, displayName, hash)
+	id, err := auth.NewStore(database).Create(ctx, username, displayName, hash, true)
 	if err != nil {
 		return fmt.Errorf("Benutzer anlegen fehlgeschlagen: %w", err)
 	}
-	fmt.Printf("Benutzer %q angelegt (ID %d). 2FA wird beim ersten Login eingerichtet.\n", username, id)
+	fmt.Printf("Admin %q angelegt (ID %d). 2FA wird beim ersten Login eingerichtet.\n", username, id)
 	return nil
 }
 

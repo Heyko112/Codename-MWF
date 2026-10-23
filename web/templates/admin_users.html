@@ -1,0 +1,68 @@
+{{define "title"}}Benutzerverwaltung · MWF{{end}}
+{{define "content"}}
+<h1>Benutzerverwaltung</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+<div class="table-wrap">
+<table class="list">
+  <thead>
+    <tr>
+      <th>Benutzername</th>
+      <th>Anzeigename</th>
+      <th>Rolle</th>
+      <th>2FA</th>
+      <th>Status</th>
+      <th>Letzter Login</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{$me := .User}}
+  {{range .Users}}
+    <tr>
+      <td>{{.Username}}</td>
+      <td>{{.DisplayName}}</td>
+      <td>{{if .IsAdmin}}Admin{{else}}Benutzer{{end}}</td>
+      <td>{{if .TOTPEnabled}}eingerichtet{{else}}<span class="muted">noch nicht</span>{{end}}</td>
+      <td>
+        {{if not .IsActive}}<span class="badge badge-off">gesperrt</span>
+        {{else if .LockedNow}}<span class="badge badge-warn">Fehlversuche</span>
+        {{else}}<span class="badge badge-on">aktiv</span>{{end}}
+      </td>
+      <td>{{if .LastLoginAt.Valid}}{{.LastLoginAt.Time.Local.Format "02.01.2006 15:04"}}{{else}}<span class="muted">nie</span>{{end}}</td>
+      <td class="actions">
+        {{if not .IsActive}}
+          <form method="post" action="/admin/benutzer/{{.ID}}/entsperren"><button type="submit" class="small">Entsperren</button></form>
+        {{else if .LockedNow}}
+          <form method="post" action="/admin/benutzer/{{.ID}}/entsperren"><button type="submit" class="small">Sperre aufheben</button></form>
+        {{else if ne .ID $me.ID}}
+          <form method="post" action="/admin/benutzer/{{.ID}}/sperren"><button type="submit" class="small danger">Sperren</button></form>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="card narrow-left">
+  <h2>Neuen Benutzer anlegen</h2>
+  {{with .Form}}{{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}{{end}}
+  <form method="post" action="/admin/benutzer">
+    <label>Benutzername
+      <input name="username" required maxlength="64" autocomplete="off" value="{{with .Form}}{{.Username}}{{end}}">
+    </label>
+    <label>Anzeigename (optional)
+      <input name="display_name" maxlength="128" autocomplete="off" value="{{with .Form}}{{.DisplayName}}{{end}}">
+    </label>
+    <label>Start-Passwort (mindestens {{.MinLength}} Zeichen)
+      <input name="password" type="password" required minlength="{{.MinLength}}" autocomplete="new-password">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="is_admin" {{with .Form}}{{if .IsAdmin}}checked{{end}}{{end}}> Admin (darf Benutzer verwalten)
+    </label>
+    <button type="submit">Benutzer anlegen</button>
+  </form>
+  <p class="hint">Gib das Start-Passwort persönlich weiter. Die 2FA wird beim ersten Login eingerichtet.</p>
+</div>
+{{end}}

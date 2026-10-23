@@ -10,6 +10,7 @@
   <header class="top">
     <a class="brand" href="/">MWF</a>
     {{with .}}{{with .User}}
+    {{if .IsAdmin}}<nav class="main"><a href="/admin/benutzer">Benutzerverwaltung</a></nav>{{end}}
     <form class="logout" method="post" action="/logout">
       <span>{{.Username}}</span>
       <button type="submit" class="link">Abmelden</button>

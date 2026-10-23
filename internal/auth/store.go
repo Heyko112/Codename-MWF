@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 // Nach so vielen Fehlversuchen in Folge wird das Konto gesperrt.
@@ -19,6 +21,7 @@ type User struct {
 	ID           int64
 	Username     string
 	DisplayName  string
+	IsAdmin      bool
 	PasswordHash string
 	TOTPSecret   []byte // verschlüsselt
 	TOTPEnabled  bool
@@ -26,6 +29,7 @@ type User struct {
 	IsActive     bool
 	FailedLogins int
 	LockedUntil  sql.NullTime
+	LastLoginAt  sql.NullTime
 }
 
 // Locked meldet, ob das Konto gerade gesperrt ist.
@@ -33,19 +37,24 @@ func (u *User) Locked(now time.Time) bool {
 	return u.LockedUntil.Valid && u.LockedUntil.Time.After(now)
 }
 
+// LockedNow ist Locked zum aktuellen Zeitpunkt (für Templates).
+func (u *User) LockedNow() bool { return u.Locked(time.Now()) }
+
 type Store struct {
 	db *sql.DB
 }
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
-const userColumns = `id, username, display_name, password_hash, totp_secret, totp_enabled,
-	totp_last_step, is_active, failed_logins, locked_until`
+const userColumns = `id, username, display_name, is_admin, password_hash, totp_secret, totp_enabled,
+	totp_last_step, is_active, failed_logins, locked_until, last_login_at`
 
-func scanUser(row *sql.Row) (*User, error) {
+type scanner interface{ Scan(dest ...any) error }
+
+func scanUser(row scanner) (*User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.PasswordHash, &u.TOTPSecret, &u.TOTPEnabled,
-		&u.TOTPLastStep, &u.IsActive, &u.FailedLogins, &u.LockedUntil)
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.IsAdmin, &u.PasswordHash, &u.TOTPSecret, &u.TOTPEnabled,
+		&u.TOTPLastStep, &u.IsActive, &u.FailedLogins, &u.LockedUntil, &u.LastLoginAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -60,15 +69,58 @@ func (s *Store) ByID(ctx context.Context, id int64) (*User, error) {
 	return scanUser(s.db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE id = ?`, id))
 }
 
+// ErrUsernameTaken meldet einen bereits vergebenen Benutzernamen.
+var ErrUsernameTaken = errors.New("Benutzername ist bereits vergeben")
+
 // Create legt einen Benutzer an. 2FA wird beim ersten Login eingerichtet.
-func (s *Store) Create(ctx context.Context, username, displayName, passwordHash string) (int64, error) {
+func (s *Store) Create(ctx context.Context, username, displayName, passwordHash string, isAdmin bool) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, ?)`,
-		username, displayName, passwordHash)
+		`INSERT INTO users (username, display_name, password_hash, is_admin) VALUES (?, ?, ?, ?)`,
+		username, displayName, passwordHash, isAdmin)
+	var me *mysql.MySQLError
+	if errors.As(err, &me) && me.Number == 1062 {
+		return 0, ErrUsernameTaken
+	}
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// List liefert alle Benutzer, sortiert nach Benutzername.
+func (s *Store) List(ctx context.Context) ([]*User, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+userColumns+` FROM users ORDER BY username`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []*User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// SetActive sperrt oder entsperrt ein Konto. Beim Entsperren wird auch die Fehlversuch-Sperre aufgehoben.
+func (s *Store) SetActive(ctx context.Context, id int64, active bool) error {
+	q := `UPDATE users SET is_active = FALSE WHERE id = ?`
+	if active {
+		q = `UPDATE users SET is_active = TRUE, failed_logins = 0, locked_until = NULL WHERE id = ?`
+	}
+	res, err := s.db.ExecContext(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, err := s.ByID(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RecordFailure zählt einen Fehlversuch und sperrt das Konto ab MaxFailedLogins.
@@ -106,8 +158,8 @@ func (s *Store) EnableTOTP(ctx context.Context, id int64, sealedSecret []byte, s
 	return err
 }
 
-// Audit schreibt ein Sicherheitsereignis. userID 0 heißt unbekannter Benutzer.
-func (s *Store) Audit(ctx context.Context, userID int64, event, ip, userAgent string) error {
+// Audit schreibt ein Sicherheitsereignis. userID 0 heißt unbekannter Benutzer, detail darf leer sein.
+func (s *Store) Audit(ctx context.Context, userID int64, event, detail, ip, userAgent string) error {
 	var uid sql.NullInt64
 	if userID > 0 {
 		uid = sql.NullInt64{Int64: userID, Valid: true}
@@ -115,8 +167,12 @@ func (s *Store) Audit(ctx context.Context, userID int64, event, ip, userAgent st
 	if len(userAgent) > 512 {
 		userAgent = userAgent[:512]
 	}
+	var det sql.NullString
+	if detail != "" {
+		det = sql.NullString{String: detail, Valid: true}
+	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO audit_log (user_id, event, ip, user_agent) VALUES (?, ?, ?, ?)`,
-		uid, event, ip, userAgent)
+		`INSERT INTO audit_log (user_id, event, detail, ip, user_agent) VALUES (?, ?, ?, ?, ?)`,
+		uid, event, det, ip, userAgent)
 	return err
 }

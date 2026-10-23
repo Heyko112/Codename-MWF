@@ -44,6 +44,10 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("GET /login/2fa/einrichten", s.totpSetupForm)
 	pages.HandleFunc("POST /login/2fa/einrichten", s.totpSetupSubmit)
 	pages.HandleFunc("POST /logout", s.logout)
+	pages.HandleFunc("GET /admin/benutzer", s.requireAdmin(s.adminUsers))
+	pages.HandleFunc("POST /admin/benutzer", s.requireAdmin(s.adminCreateUser))
+	pages.HandleFunc("POST /admin/benutzer/{id}/sperren", s.requireAdmin(s.adminLockUser))
+	pages.HandleFunc("POST /admin/benutzer/{id}/entsperren", s.requireAdmin(s.adminUnlockUser))
 	pages.HandleFunc("/", s.notFound)
 	mux.Handle("/", s.sessions.LoadAndSave(pages))
 

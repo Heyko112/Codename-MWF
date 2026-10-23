@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // Zeitzonen-Daten im Binary, distroless hat keine
 
 	"github.com/alexedwards/scs/mysqlstore"
 	"github.com/alexedwards/scs/v2"

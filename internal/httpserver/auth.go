@@ -34,6 +34,21 @@ func CurrentUser(ctx context.Context) *auth.User {
 	return u
 }
 
+// requireAdmin lässt nur angemeldete Admins durch.
+func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return s.requireLogin(func(w http.ResponseWriter, r *http.Request) {
+		if !CurrentUser(r.Context()).IsAdmin {
+			s.render(w, r, http.StatusForbidden, "error", map[string]any{
+				"User":    CurrentUser(r.Context()),
+				"Status":  "403",
+				"Message": "Diese Seite ist nur für Administratoren.",
+			})
+			return
+		}
+		next(w, r)
+	})
+}
+
 // requireLogin leitet nicht angemeldete Besucher zur Login-Seite um.
 func (s *Server) requireLogin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -263,11 +278,15 @@ func (s *Server) recordFailure(r *http.Request, userID int64) bool {
 }
 
 func (s *Server) audit(r *http.Request, userID int64, event string) {
+	s.auditDetail(r, userID, event, "")
+}
+
+func (s *Server) auditDetail(r *http.Request, userID int64, event, detail string) {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		ip = r.RemoteAddr
 	}
-	if err := s.users.Audit(r.Context(), userID, event, ip, r.UserAgent()); err != nil {
+	if err := s.users.Audit(r.Context(), userID, event, detail, ip, r.UserAgent()); err != nil {
 		slog.Error("Audit-Eintrag fehlgeschlagen", "id", RequestIDFrom(r.Context()), "event", event, "fehler", err)
 	}
 }
