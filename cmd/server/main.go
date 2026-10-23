@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,9 +12,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alexedwards/scs/mysqlstore"
+	"github.com/alexedwards/scs/v2"
+
 	"github.com/Heyko112/codename-mwf/internal/config"
 	"github.com/Heyko112/codename-mwf/internal/db"
 	"github.com/Heyko112/codename-mwf/internal/httpserver"
+	"github.com/Heyko112/codename-mwf/web"
 )
 
 func main() {
@@ -47,9 +52,27 @@ func run() error {
 		return err
 	}
 
+	sessions := scs.New()
+	sessions.Store = mysqlstore.New(database)
+	sessions.Lifetime = 12 * time.Hour
+	sessions.IdleTimeout = 1 * time.Hour
+	sessions.Cookie.Name = "mwf_session"
+	sessions.Cookie.HttpOnly = true
+	sessions.Cookie.SameSite = http.SameSiteLaxMode
+	sessions.Cookie.Secure = cfg.CookieSecure
+
+	templates, err := httpserver.LoadTemplates(web.FS)
+	if err != nil {
+		return err
+	}
+	static, err := fs.Sub(web.FS, "static")
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpserver.NewRouter(database),
+		Handler:           httpserver.New(database, sessions, templates, static).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

@@ -3,6 +3,8 @@ module github.com/Heyko112/codename-mwf
 go 1.25.0
 
 require (
+	github.com/alexedwards/scs/mysqlstore v0.0.0-20251002162104-209de6e426de
+	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/pressly/goose/v3 v3.27.0
 )

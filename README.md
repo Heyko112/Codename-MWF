@@ -17,7 +17,8 @@ Die Datenbank liegt im Volume `db-data` und bleibt bei Neustarts erhalten.
 - `cmd/server/` Einstiegspunkt der App
 - `internal/config/` Konfiguration aus Umgebungsvariablen
 - `internal/db/` Verbindung zu MariaDB
-- `internal/httpserver/` Router und Handler
+- `internal/httpserver/` Router, Middleware (Request-ID, Logging, Panic-Schutz, Security-Header, CSRF) und Handler
+- `web/` Templates und statische Dateien (ins Binary eingebettet)
 - `migrations/` SQL-Migrationen (ins Binary eingebettet)
 
 ## Migrationen
@@ -26,4 +27,4 @@ Die App spielt beim Start alle fehlenden Migrationen aus `migrations/` ein (goos
 
 ## Stack
 
-Go 1.25 (`net/http`), MariaDB 11.4, `go-sql-driver/mysql`, `goose` (Migrationen). Geplant: Argon2id, TOTP (`pquerna/otp`), `scs` (Sessions).
+Go 1.25 (`net/http`), MariaDB 11.4, `go-sql-driver/mysql`, `goose` (Migrationen). `scs` (Sessions in MariaDB). Geplant: Argon2id, TOTP (`pquerna/otp`).
