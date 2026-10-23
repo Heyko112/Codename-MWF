@@ -1,0 +1,20 @@
+{{define "title"}}Daten · MWF{{end}}
+{{define "content"}}
+<h1>Daten</h1>
+{{if .Tables}}
+<div class="table-wrap">
+<table class="list">
+  <thead><tr><th>Tabelle</th><th>Beschreibung</th><th>Datensätze</th></tr></thead>
+  <tbody>
+  {{range .Tables}}
+    <tr>
+      <td><a href="/daten/{{.ID}}">{{.Name}}</a></td>
+      <td>{{with .Description}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
+      <td>{{.RowCount}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}<p class="muted">Für dich sind noch keine Tabellen freigegeben.</p>{{end}}
+{{end}}

@@ -199,3 +199,13 @@ table.list td input:not([type=checkbox]) { margin: 0; padding: 6px 8px; }
 label select { display: block; width: 100%; margin-top: 6px; }
 td.actions form { display: inline-block; }
 form.row label.check { margin: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.toolbar form.row { margin: 0; }
+.toolbar input { margin: 0; min-width: 240px; }
+a.button { display: inline-block; padding: 10px 16px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 6px; text-decoration: none; }
+textarea { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+fieldset.plain { border: 0; padding: 0; margin: 0; }
+.field-error { margin: -12px 0 16px; color: #a4161a; font-size: 0.9rem; }
+.req { color: #c0392b; }
+input:disabled, textarea:disabled { opacity: 0.8; }
+@media (prefers-color-scheme: dark) { .field-error { color: #ffb4b4; } }
