@@ -1,0 +1,50 @@
+{{define "title"}}{{.Target.Username}} · Benutzer · MWF{{end}}
+{{define "content"}}
+<p><a href="/admin/benutzer">← Alle Benutzer</a></p>
+<h1>{{.Target.Username}}
+  {{if .Target.IsService}}<span class="badge">Service</span>{{end}}
+  {{if .Target.IsHidden}}<span class="badge">versteckt</span>{{end}}
+  {{if not .Target.IsActive}}<span class="badge badge-off">gesperrt</span>{{end}}</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+<div class="grid">
+<div class="card">
+  <h2>Stammdaten</h2>
+  <form method="post" action="/admin/benutzer/{{.Target.ID}}">
+    <label>Anzeigename
+      <input name="display_name" maxlength="128" autocomplete="off" value="{{.Target.DisplayName}}">
+    </label>
+    <label class="check"><input type="checkbox" name="is_hidden" {{if .Target.IsHidden}}checked{{end}}> Versteckt</label>
+    <label class="check"><input type="checkbox" name="is_service" {{if .Target.IsService}}checked{{end}} {{if .IsSelf}}disabled{{end}}> Service-User (kein Web-Login)</label>
+    <button type="submit">Speichern</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Rollen</h2>
+  <form method="post" action="/admin/benutzer/{{.Target.ID}}/rollen">
+    {{range .AllRoles}}
+    <label class="check"><input type="checkbox" name="role" value="{{.ID}}" {{if index $.Direct .ID}}checked{{end}}> {{.Name}}{{if .Hidden}} <span class="muted">(versteckt)</span>{{end}}</label>
+    {{else}}<p class="muted">Es gibt noch keine Rollen.</p>{{end}}
+    <button type="submit">Rollen speichern</button>
+  </form>
+</div>
+</div>
+
+<div class="card">
+  <h2>Warum hat {{.Target.Username}} Zugriff?</h2>
+  {{if .Perms}}
+  <table class="list">
+    <thead><tr><th>Recht</th><th>kommt über</th></tr></thead>
+    <tbody>
+    {{range .Perms}}<tr><td>{{.Label}}</td><td>{{range $i, $p := .Path}}{{if $i}} → {{end}}{{$p}}{{end}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  {{else}}<p class="muted">Keine Rechte.</p>{{end}}
+  {{with .Indirect}}
+  <h3>Zusätzlich Mitglied über Verschachtelung</h3>
+  <ul>{{range .}}<li>{{.Label}} <span class="muted">({{range $i, $p := .Path}}{{if $i}} → {{end}}{{$p}}{{end}})</span></li>{{end}}</ul>
+  {{end}}
+  <p class="hint">Der Pfad zeigt, über welche Rollen das Recht ankommt: direkte Rolle → umgebende Rolle → …</p>
+</div>
+{{end}}

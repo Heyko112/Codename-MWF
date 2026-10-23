@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Heyko112/codename-mwf/internal/auth"
+	"github.com/Heyko112/codename-mwf/internal/authz"
 )
 
 // Session-Schlüssel
@@ -34,14 +35,30 @@ func CurrentUser(ctx context.Context) *auth.User {
 	return u
 }
 
-// requireAdmin lässt nur angemeldete Admins durch.
-func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+type accessCtxKey struct{}
+
+type accessInfo struct {
+	graph  *authz.Graph
+	access *authz.Access
+}
+
+// CurrentAccess liefert Rollen und Rechte des angemeldeten Benutzers (nur hinter requireLogin gesetzt).
+func CurrentAccess(ctx context.Context) (*authz.Graph, *authz.Access) {
+	a, _ := ctx.Value(accessCtxKey{}).(*accessInfo)
+	if a == nil {
+		return nil, nil
+	}
+	return a.graph, a.access
+}
+
+// requirePerm lässt nur angemeldete Benutzer mit dem Recht perm durch.
+func (s *Server) requirePerm(perm string, next http.HandlerFunc) http.HandlerFunc {
 	return s.requireLogin(func(w http.ResponseWriter, r *http.Request) {
-		if !CurrentUser(r.Context()).IsAdmin {
+		if _, acc := CurrentAccess(r.Context()); !acc.Has(perm) {
 			s.render(w, r, http.StatusForbidden, "error", map[string]any{
 				"User":    CurrentUser(r.Context()),
 				"Status":  "403",
-				"Message": "Diese Seite ist nur für Administratoren.",
+				"Message": "Dafür fehlt dir das Recht „" + authz.PermissionLabel(perm) + "“.",
 			})
 			return
 		}
@@ -58,13 +75,20 @@ func (s *Server) requireLogin(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		u, err := s.users.ByID(r.Context(), id)
-		if err != nil || !u.IsActive {
+		if err != nil || !u.IsActive || u.IsService {
 			s.sessions.Destroy(r.Context())
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
+		g, acc, err := s.roles.Access(r.Context(), u.ID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		ctx := context.WithValue(r.Context(), userCtxKey{}, u)
+		ctx = context.WithValue(ctx, accessCtxKey{}, &accessInfo{graph: g, access: acc})
 		w.Header().Set("Cache-Control", "no-store")
-		next(w, r.WithContext(context.WithValue(r.Context(), userCtxKey{}, u)))
+		next(w, r.WithContext(ctx))
 	}
 }
 
@@ -96,7 +120,8 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	if !u.IsActive || u.Locked(time.Now()) {
+	// Service-User haben keinen Web-Login.
+	if !u.IsActive || u.IsService || u.Locked(time.Now()) {
 		auth.BurnTime(password)
 		fail(u.ID, "login_blocked")
 		return
@@ -135,7 +160,7 @@ func (s *Server) pendingUser(r *http.Request) *auth.User {
 		return nil
 	}
 	u, err := s.users.ByID(ctx, id)
-	if err != nil || !u.IsActive || u.Locked(time.Now()) {
+	if err != nil || !u.IsActive || u.IsService || u.Locked(time.Now()) {
 		return nil
 	}
 	return u

@@ -18,11 +18,19 @@ Die Datenbank liegt im Volume `db-data` und bleibt bei Neustarts erhalten.
 docker compose exec app /server create-user <benutzername> "<Anzeigename>"
 ```
 
-Das Passwort (mindestens 12 Zeichen) wird abgefragt. So angelegte Benutzer sind Admins. Danach unter http://localhost:8080 anmelden. Beim ersten Login wird die 2FA mit einer Authenticator-App eingerichtet, sie ist Pflicht.
+Das Passwort (mindestens 12 Zeichen) wird abgefragt. So angelegte Benutzer kommen in die Rolle „Administratoren“. Danach unter http://localhost:8080 anmelden. Beim ersten Login wird die 2FA mit einer Authenticator-App eingerichtet, sie ist Pflicht.
 
-## Benutzerverwaltung
+## Benutzer, Rollen und Rechte
 
-Admins finden oben im Menü die **Benutzerverwaltung** (`/admin/benutzer`): Benutzer anlegen (optional als Admin), sperren und entsperren. Entsperren hebt auch eine Sperre nach Fehlversuchen auf. Gesperrte Benutzer werden sofort abgemeldet. Jede Aktion landet mit dem handelnden Admin im `audit_log`.
+Oben im Menü stehen **Benutzer** (`/admin/benutzer`) und **Rollen** (`/admin/rollen`), je nach Recht.
+
+- **Rechte** hängen nur an Rollen: „Benutzer verwalten“, „Rollen und Rechte verwalten“, „Tabellen definieren“. Die Rolle „Administratoren“ hat immer alle Rechte und braucht mindestens ein Mitglied.
+- **Verschachtelung:** Liegt Rolle B in Rolle A, sind die Mitglieder von B auch Mitglieder von A und erben deren Rechte. Rein additiv, keine Kreise, höchstens 3 Ebenen.
+- **Versteckt:** Rollen und Benutzer lassen sich verstecken. Eine Service-Rolle ist eine versteckte Rolle.
+- **Service-User** haben keinen Web-Login (später API-Key).
+- Auf der Benutzerseite zeigt „Warum hat X Zugriff?“, über welche Rollen jedes Recht ankommt.
+- Nur Administratoren dürfen die Rolle „Administratoren“ vergeben oder verschachteln und Administratoren ändern oder sperren.
+- Entsperren hebt auch eine Sperre nach Fehlversuchen auf, gesperrte Benutzer werden sofort abgemeldet. Jede Aktion landet im `audit_log`.
 
 Die App ist standardmäßig nur auf dem eigenen Rechner erreichbar (`APP_BIND=127.0.0.1`). Zeiten werden in `Europe/Berlin` angezeigt (änderbar über `TZ` in der `.env`).
 
