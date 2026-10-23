@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+
+	"github.com/Heyko112/codename-mwf/internal/auth"
 )
 
 // Server bündelt die Abhängigkeiten der Handler.
@@ -18,10 +20,12 @@ type Server struct {
 	sessions  *scs.SessionManager
 	templates Templates
 	static    fs.FS
+	users     *auth.Store
+	secrets   *auth.SecretBox
 }
 
-func New(db *sql.DB, sessions *scs.SessionManager, templates Templates, static fs.FS) *Server {
-	return &Server{db: db, sessions: sessions, templates: templates, static: static}
+func New(db *sql.DB, sessions *scs.SessionManager, templates Templates, static fs.FS, secrets *auth.SecretBox) *Server {
+	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), secrets: secrets}
 }
 
 // Handler registriert alle Routen und legt die Middleware-Kette darum.
@@ -32,7 +36,14 @@ func (s *Server) Handler() http.Handler {
 
 	// Seiten mit Session
 	pages := http.NewServeMux()
-	pages.HandleFunc("GET /{$}", s.home)
+	pages.HandleFunc("GET /{$}", s.requireLogin(s.home))
+	pages.HandleFunc("GET /login", s.loginForm)
+	pages.HandleFunc("POST /login", s.loginSubmit)
+	pages.HandleFunc("GET /login/2fa", s.totpForm)
+	pages.HandleFunc("POST /login/2fa", s.totpSubmit)
+	pages.HandleFunc("GET /login/2fa/einrichten", s.totpSetupForm)
+	pages.HandleFunc("POST /login/2fa/einrichten", s.totpSetupSubmit)
+	pages.HandleFunc("POST /logout", s.logout)
 	pages.HandleFunc("/", s.notFound)
 	mux.Handle("/", s.sessions.LoadAndSave(pages))
 
@@ -40,7 +51,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, "home", nil)
+	s.render(w, r, http.StatusOK, "home", map[string]any{"User": CurrentUser(r.Context())})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,15 @@
+{{define "title"}}Bestätigungscode · MWF{{end}}
+{{define "content"}}
+<div class="card narrow">
+  <h1>Bestätigungscode</h1>
+  <p>Gib den 6-stelligen Code aus deiner Authenticator-App ein.</p>
+  {{with .}}{{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}{{end}}
+  <form method="post" action="/login/2fa">
+    <label>Code
+      <input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+    </label>
+    <button type="submit">Anmelden</button>
+  </form>
+  <p class="hint"><a href="/login">Abbrechen</a></p>
+</div>
+{{end}}

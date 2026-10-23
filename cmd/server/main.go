@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/alexedwards/scs/mysqlstore"
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/Heyko112/codename-mwf/internal/auth"
 	"github.com/Heyko112/codename-mwf/internal/config"
 	"github.com/Heyko112/codename-mwf/internal/db"
 	"github.com/Heyko112/codename-mwf/internal/httpserver"
@@ -26,6 +28,13 @@ func main() {
 	// Distroless hat weder curl noch wget, daher prüft das Binary sich selbst.
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
+	}
+	if len(os.Args) > 1 && os.Args[1] == "create-user" {
+		if err := createUser(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Fehler:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if err := run(); err != nil {
 		slog.Error("Start fehlgeschlagen", "fehler", err)
@@ -69,10 +78,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	secrets, err := auth.NewSecretBox(cfg.TOTPKey)
+	if err != nil {
+		return err
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           httpserver.New(database, sessions, templates, static).Handler(),
+		Handler:           httpserver.New(database, sessions, templates, static, secrets).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

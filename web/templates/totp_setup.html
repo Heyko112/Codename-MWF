@@ -1,0 +1,16 @@
+{{define "title"}}2FA einrichten · MWF{{end}}
+{{define "content"}}
+<div class="card narrow">
+  <h1>Zwei-Faktor-Anmeldung einrichten</h1>
+  <p>Für dein Konto ist 2FA Pflicht. Scanne den QR-Code mit einer Authenticator-App (z. B. Microsoft Authenticator, Google Authenticator, 2FAS) und gib danach den angezeigten Code ein.</p>
+  {{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}
+  <img class="qr" src="{{.QRCode}}" alt="QR-Code für die Authenticator-App" width="240" height="240">
+  <p class="hint">Scannen nicht möglich? Schlüssel manuell eingeben:<br><code class="secret">{{.Secret}}</code></p>
+  <form method="post" action="/login/2fa/einrichten">
+    <label>Code aus der App
+      <input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+    </label>
+    <button type="submit">Bestätigen und anmelden</button>
+  </form>
+</div>
+{{end}}
