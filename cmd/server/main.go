@@ -43,6 +43,10 @@ func run() error {
 	}
 	defer database.Close()
 
+	if err := db.Migrate(ctx, database); err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           httpserver.NewRouter(database),
