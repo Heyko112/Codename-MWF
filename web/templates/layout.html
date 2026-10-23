@@ -1,0 +1,17 @@
+{{define "layout"}}<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}MWF{{end}}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">MWF</a>
+  </header>
+  <main class="content">
+    {{template "content" .}}
+  </main>
+</body>
+</html>{{end}}
