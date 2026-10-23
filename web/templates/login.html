@@ -1,0 +1,16 @@
+{{define "title"}}Anmelden · MWF{{end}}
+{{define "content"}}
+<div class="card narrow">
+  <h1>Anmelden</h1>
+  {{with .}}{{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}{{end}}
+  <form method="post" action="/login">
+    <label>Benutzername
+      <input name="username" autocomplete="username" required autofocus value="{{with .}}{{.Username}}{{end}}">
+    </label>
+    <label>Passwort
+      <input name="password" type="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit">Weiter</button>
+  </form>
+</div>
+{{end}}

@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 )
@@ -15,6 +16,8 @@ type Config struct {
 	DBPassword string
 	// Session-Cookie nur über HTTPS senden. Ab Schritt 6 (TLS) standardmäßig an.
 	CookieSecure bool
+	// 32-Byte-Schlüssel (Base64) zum Verschlüsseln der TOTP-Secrets
+	TOTPKey []byte
 }
 
 // Load liest die Konfiguration und meldet fehlende Pflichtwerte.
@@ -33,6 +36,11 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("Umgebungsvariable %s fehlt", name)
 		}
 	}
+	key, err := base64.StdEncoding.DecodeString(os.Getenv("TOTP_KEY"))
+	if err != nil || len(key) != 32 {
+		return c, fmt.Errorf("TOTP_KEY fehlt oder ist kein Base64-Wert mit 32 Byte (erzeugen mit: openssl rand -base64 32)")
+	}
+	c.TOTPKey = key
 	return c, nil
 }
 

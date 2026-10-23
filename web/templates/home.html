@@ -1,5 +1,5 @@
 {{define "title"}}Start · MWF{{end}}
 {{define "content"}}
-<h1>Willkommen</h1>
-<p>Das Basissystem läuft. Der Login folgt in Schritt 5.</p>
+<h1>Willkommen, {{with .User.DisplayName}}{{.}}{{else}}{{.User.Username}}{{end}}</h1>
+<p>Du bist mit Passwort und 2FA angemeldet.</p>
 {{end}}

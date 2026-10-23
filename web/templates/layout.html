@@ -9,6 +9,12 @@
 <body>
   <header class="top">
     <a class="brand" href="/">MWF</a>
+    {{with .}}{{with .User}}
+    <form class="logout" method="post" action="/logout">
+      <span>{{.Username}}</span>
+      <button type="submit" class="link">Abmelden</button>
+    </form>
+    {{end}}{{end}}
   </header>
   <main class="content">
     {{template "content" .}}
