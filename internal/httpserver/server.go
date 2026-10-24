@@ -78,6 +78,16 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/hoch", tbl(s.adminMoveColumnUp))
 	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/runter", tbl(s.adminMoveColumnDown))
 	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/loeschen", tbl(s.adminDeleteColumn))
+	pages.HandleFunc("POST /admin/tabellen/{id}/rechte", tbl(s.adminSetTablePerms))
+
+	// Datensätze: Rechte je Tabelle prüfen die Handler selbst
+	pages.HandleFunc("GET /daten", s.requireLogin(s.dataTables))
+	pages.HandleFunc("GET /daten/{id}", s.requireLogin(s.dataRecords))
+	pages.HandleFunc("GET /daten/{id}/neu", s.requireLogin(s.dataNewForm))
+	pages.HandleFunc("POST /daten/{id}/neu", s.requireLogin(s.dataCreate))
+	pages.HandleFunc("GET /daten/{id}/{rec}", s.requireLogin(s.dataRecord))
+	pages.HandleFunc("POST /daten/{id}/{rec}", s.requireLogin(s.dataUpdate))
+	pages.HandleFunc("POST /daten/{id}/{rec}/loeschen", s.requireLogin(s.dataDelete))
 	pages.HandleFunc("/", s.notFound)
 	mux.Handle("/", s.sessions.LoadAndSave(pages))
 

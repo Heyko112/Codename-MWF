@@ -1,0 +1,37 @@
+{{define "title"}}{{.Table.Name}} · Daten · MWF{{end}}
+{{define "content"}}
+<p><a href="/daten">← Alle Tabellen</a></p>
+<h1>{{.Table.Name}}</h1>
+{{with .Table.Description}}<p class="muted">{{.}}</p>{{end}}
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+<div class="toolbar">
+  <form class="row" method="get" action="/daten/{{.Table.ID}}">
+    <input name="q" value="{{.Query}}" placeholder="Suchen in Textfeldern oder ID" aria-label="Suche">
+    <button type="submit" class="small">Suchen</button>
+    {{if .Query}}<a href="/daten/{{.Table.ID}}">zurücksetzen</a>{{end}}
+  </form>
+  {{if .Perms.Create}}<a class="button" href="/daten/{{.Table.ID}}/neu">Neuer Datensatz</a>{{end}}
+</div>
+
+{{if .Rows}}
+<div class="table-wrap">
+<table class="list">
+  <thead><tr><th>ID</th>{{range .Table.Columns}}<th>{{.Name}}</th>{{end}}</tr></thead>
+  <tbody>
+  {{$t := .Table}}
+  {{range .Rows}}
+    <tr>
+      <td><a href="/daten/{{$t.ID}}/{{.ID}}">{{.ID}}</a></td>
+      {{range .Cells}}<td{{with .Title}} title="{{.}}"{{end}}>{{.Text}}</td>{{end}}
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p class="muted">{{.Total}} Datensätze{{if gt .Pages 1}} · Seite {{.Page}} von {{.Pages}}{{end}}
+  {{with .Prev}} · <a href="{{.}}">← zurück</a>{{end}}
+  {{with .Next}} · <a href="{{.}}">weiter →</a>{{end}}</p>
+{{else if .Query}}<p class="muted">Nichts gefunden.</p>
+{{else}}<p class="muted">Noch keine Datensätze.</p>{{end}}
+{{end}}

@@ -39,8 +39,17 @@ Mit dem Recht „Tabellen definieren“ erscheint oben **Tabellen** (`/admin/tab
 - Jede Tabelle ist eine echte MariaDB-Tabelle `dt_<ID>`, jede Spalte heißt `c_<ID>`. Die Namen in der Oberfläche sind nur Beschriftung, Umbenennen ändert nichts an der Struktur.
 - Jede Tabelle hat automatisch `id`, `created_at`, `created_by`, `updated_at`, `updated_by`.
 - Bei Text lässt sich die Länge nur vergrößern, der Typ einer Spalte bleibt fest. Die Reihenfolge der Spalten ist nur Anzeige.
-- Pflichtfelder prüft die App beim Speichern von Datensätzen (kommt in Schritt C).
+- Pflichtfelder prüft die App beim Speichern von Datensätzen.
 - Löschen einer Spalte oder Tabelle entfernt auch die Daten und muss bestätigt werden.
+
+## Daten
+
+Unter **Daten** (`/daten`) sieht jeder angemeldete Benutzer die Tabellen, für die er Rechte hat, und kann dort Datensätze suchen, anlegen, ändern und löschen.
+
+- Die Rechte vergibst du auf der Tabellenseite unter „Rechte an den Datensätzen“ je Rolle: Lesen, Anlegen, Ändern, Löschen. Sie gelten additiv auch über enthaltene Rollen, Anlegen, Ändern und Löschen schließen Lesen ein. „Administratoren“ dürfen immer alles.
+- Wer keine Rechte an einer Tabelle hat, bekommt 404, die Tabelle ist für ihn unsichtbar.
+- Zahlen in deutscher Schreibweise (1.234,56), Datum als 31.12.2026. Gesucht wird in Textfeldern und nach ID, 50 Datensätze je Seite.
+- Gelöschte Datensätze landen im `audit_log`.
 
 Die App ist standardmäßig nur auf dem eigenen Rechner erreichbar (`APP_BIND=127.0.0.1`). Zeiten werden in `Europe/Berlin` angezeigt (änderbar über `TZ` in der `.env`).
 

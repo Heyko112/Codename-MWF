@@ -104,11 +104,23 @@ func (s *Server) adminTableDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	roles, err := s.roles.ListRoles(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	perms, err := s.tables.RolePerms(ctx, t.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	s.render(w, r, http.StatusOK, "admin_table", map[string]any{
-		"User":  CurrentUser(ctx),
-		"Table": t,
-		"Types": tables.Types,
-		"Flash": s.sessions.PopString(ctx, sessFlash),
+		"User":      CurrentUser(ctx),
+		"Table":     t,
+		"Types":     tables.Types,
+		"Roles":     roles,
+		"RolePerms": perms,
+		"Flash":     s.sessions.PopString(ctx, sessFlash),
 	})
 }
 
@@ -237,4 +249,65 @@ func (s *Server) adminDeleteColumn(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditDetail(r, 0, "column_deleted", c.Name+" aus "+t.Name+" durch "+CurrentUser(r.Context()).Username)
 	s.flashRedirect(w, r, "Spalte „"+c.Name+"“ mit allen Werten gelöscht.", tableURL(t.ID))
+}
+
+// adminSetTablePerms speichert die Rechte-Matrix. Feldname r<Rollen-ID>, Werte read/create/update/delete.
+func (s *Server) adminSetTablePerms(w http.ResponseWriter, r *http.Request) {
+	t, ok := s.loadTable(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	roles, err := s.roles.ListRoles(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	r.ParseForm()
+	perms := map[int64]tables.Perms{}
+	var summary []string
+	for _, role := range roles {
+		if role.System {
+			continue
+		}
+		var p tables.Perms
+		for _, v := range r.PostForm["r"+strconv.FormatInt(role.ID, 10)] {
+			switch v {
+			case "read":
+				p.Read = true
+			case "create":
+				p.Create = true
+			case "update":
+				p.Update = true
+			case "delete":
+				p.Delete = true
+			}
+		}
+		if p.Any() {
+			perms[role.ID] = p
+			summary = append(summary, role.Name+" "+permLetters(p))
+		}
+	}
+	if err := s.tables.SetRolePerms(ctx, t.ID, perms); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.auditDetail(r, 0, "table_permissions_changed", t.Name+" durch "+CurrentUser(ctx).Username+": "+strings.Join(summary, ", "))
+	s.flashRedirect(w, r, "Rechte für „"+t.Name+"“ gespeichert.", tableURL(t.ID))
+}
+
+// permLetters kürzt Rechte fürs Protokoll ab, z. B. „LAÄ-“.
+func permLetters(p tables.Perms) string {
+	out := ""
+	for _, x := range []struct {
+		on bool
+		l  string
+	}{{p.Read, "L"}, {p.Create, "A"}, {p.Update, "Ä"}, {p.Delete, "X"}} {
+		if x.on {
+			out += x.l
+		} else {
+			out += "-"
+		}
+	}
+	return out
 }

@@ -70,6 +70,31 @@
 </div>
 </div>
 
+<div class="card">
+  <h2>Rechte an den Datensätzen</h2>
+  <p class="hint">Gilt für alle Mitglieder der Rolle, auch über enthaltene Rollen. Anlegen, Ändern und Löschen schließen Lesen ein. „Administratoren“ dürfen immer alles.</p>
+  <form method="post" action="/admin/tabellen/{{.Table.ID}}/rechte">
+  <div class="table-wrap">
+  <table class="list">
+    <thead><tr><th>Rolle</th><th>Lesen</th><th>Anlegen</th><th>Ändern</th><th>Löschen</th></tr></thead>
+    <tbody>
+    {{range .Roles}}{{if not .System}}{{$p := index $.RolePerms .ID}}
+      <tr>
+        <td>{{.Name}}{{if .Hidden}} <span class="muted">(versteckt)</span>{{end}}</td>
+        <td><input type="checkbox" name="r{{.ID}}" value="read" {{if $p.Read}}checked{{end}} aria-label="{{.Name}} lesen"></td>
+        <td><input type="checkbox" name="r{{.ID}}" value="create" {{if $p.Create}}checked{{end}} aria-label="{{.Name}} anlegen"></td>
+        <td><input type="checkbox" name="r{{.ID}}" value="update" {{if $p.Update}}checked{{end}} aria-label="{{.Name}} ändern"></td>
+        <td><input type="checkbox" name="r{{.ID}}" value="delete" {{if $p.Delete}}checked{{end}} aria-label="{{.Name}} löschen"></td>
+      </tr>
+    {{end}}{{end}}
+    </tbody>
+  </table>
+  </div>
+  <button type="submit">Rechte speichern</button>
+  </form>
+  <p><a href="/daten/{{.Table.ID}}">Zu den Datensätzen →</a></p>
+</div>
+
 <div class="card narrow-left">
   <h2>Tabelle löschen</h2>
   <p>Löscht die Tabelle mit allen {{.Table.RowCount}} Datensätzen. Das lässt sich nicht rückgängig machen.</p>
