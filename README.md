@@ -51,6 +51,23 @@ Unter **Daten** (`/daten`) sieht jeder angemeldete Benutzer die Tabellen, für d
 - Zahlen in deutscher Schreibweise (1.234,56), Datum als 31.12.2026. Gesucht wird in Textfeldern und nach ID, 50 Datensätze je Seite.
 - Gelöschte Datensätze landen im `audit_log`.
 
+## Widgets
+
+Widgets sind kleine eigene Webapps, die abgeschottet in MWF laufen (Konzept: Schritte D1 bis D5). Unter **Widgets** (`/widgets`) sieht jeder Benutzer die für ihn freigegebenen Widgets und öffnet sie im Vollbild.
+
+- Mit dem Recht „Widgets verwalten“ lädst du unter `/admin/widgets` ein Paket als ZIP hoch (höchstens 10 MB, entpackt 20 MB, 500 Dateien). Gleiche ID im Manifest = Aktualisierung.
+- Sichtbarkeit je Rolle, additiv auch über enthaltene Rollen. Inaktive Widgets sehen nur Verwalter.
+- Ein Widget läuft in einem `iframe` mit `sandbox` ohne eigene Herkunft: keine Cookies, kein Zugriff auf die MWF-Seite, kein Internet (strenge CSP). Dateien werden über eine signierte, 8 Stunden gültige Adresse geladen, die Rechte werden bei jeder Datei neu geprüft.
+- Erlaubte Dateitypen: HTML, JS, CSS, JSON, Text, Bilder (SVG, PNG, JPG, GIF, WebP, ICO), Schriften (WOFF, WOFF2, TTF).
+
+Ein Beispiel liegt in `examples/widgets/hallo`. Den Ordner `hallo` als ZIP packen (Windows: Rechtsklick → Senden an → ZIP-komprimierter Ordner) und hochladen. Das Paket braucht eine `manifest.json`:
+
+```json
+{ "id": "hallo", "name": "Hallo", "version": "1.0.0", "description": "…", "size": "small", "entry": "index.html" }
+```
+
+`id`: Kleinbuchstaben, Ziffern, Minus. `size`: `small`, `wide` oder `large` (für die Startseite, kommt in D3). Datenzugriff aus dem Widget folgt in D2.
+
 Die App ist standardmäßig nur auf dem eigenen Rechner erreichbar (`APP_BIND=127.0.0.1`). Zeiten werden in `Europe/Berlin` angezeigt (änderbar über `TZ` in der `.env`).
 
 ## Login und Sicherheit

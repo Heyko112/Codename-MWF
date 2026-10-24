@@ -1,0 +1,37 @@
+{{define "title"}}Widgets verwalten · MWF{{end}}
+{{define "content"}}
+<p><a href="/widgets">← Widgets</a></p>
+<h1>Widgets verwalten</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+{{if .Widgets}}
+<div class="table-wrap">
+<table class="list">
+  <thead><tr><th>Widget</th><th>ID</th><th>Version</th><th>Sichtbar für</th><th>Status</th></tr></thead>
+  <tbody>
+  {{range .Widgets}}
+    <tr>
+      <td><a href="/admin/widgets/{{.ID}}">{{.Name}}</a></td>
+      <td><code>{{.Slug}}</code></td>
+      <td>{{.Version}}</td>
+      <td>{{range $i, $r := .Roles}}{{if $i}}, {{end}}{{$r}}{{else}}<span class="muted">nur Administratoren</span>{{end}}</td>
+      <td>{{if .Active}}<span class="badge badge-on">aktiv</span>{{else}}<span class="badge badge-warn">inaktiv</span>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}<p class="muted">Noch keine Widgets installiert.</p>{{end}}
+
+<div class="card narrow-left">
+  <h2>Widget installieren oder aktualisieren</h2>
+  {{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}
+  <form method="post" action="/admin/widgets" enctype="multipart/form-data">
+    <label>Paket (ZIP, höchstens {{.MaxMB}} MB)
+      <input type="file" name="package" accept=".zip,application/zip" required>
+    </label>
+    <button type="submit">Hochladen und prüfen</button>
+  </form>
+  <p class="hint">Hat ein installiertes Widget dieselbe ID im Manifest, wird es aktualisiert. Sichtbarkeit und Status bleiben dabei erhalten.</p>
+</div>
+{{end}}

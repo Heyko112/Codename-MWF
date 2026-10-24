@@ -1,0 +1,17 @@
+{{define "title"}}Widgets · MWF{{end}}
+{{define "content"}}
+<div class="toolbar">
+  <h1>Widgets</h1>
+  {{if index .Can "widgets.manage"}}<a class="button" href="/admin/widgets">Widgets verwalten</a>{{end}}
+</div>
+{{if .Widgets}}
+<div class="widget-cards">
+  {{range .Widgets}}
+  <a class="widget-card" href="/widgets/{{.ID}}">
+    <strong>{{.Name}}</strong>{{if not .Active}} <span class="badge badge-warn">inaktiv</span>{{end}}
+    <span class="muted">{{with .Description}}{{.}}{{else}}Version {{.Version}}{{end}}</span>
+  </a>
+  {{end}}
+</div>
+{{else}}<p class="muted">Für dich sind noch keine Widgets freigegeben.</p>{{end}}
+{{end}}

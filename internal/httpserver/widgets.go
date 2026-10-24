@@ -1,0 +1,359 @@
+package httpserver
+
+import (
+	"crypto/hmac"
+	"encoding/base64"
+	"errors"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/Heyko112/codename-mwf/internal/authz"
+	"github.com/Heyko112/codename-mwf/internal/widgets"
+)
+
+// Widgets laufen in einem iframe mit sandbox ohne allow-same-origin, also mit eigener, leerer Herkunft.
+// Dort gibt es keine Cookies. Deshalb steckt in der Adresse jeder Widget-Datei eine signierte,
+// kurzlebige Marke: /w/<widget>/<benutzer>.<ablauf>.<signatur>/<pfad>.
+const widgetTokenTTL = 8 * time.Hour
+
+// widgetCSP: nur Dateien aus dem eigenen Paket, kein Internet, keine Formulare nach außen.
+const widgetCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+	"font-src 'self'; connect-src 'self'; media-src 'self' blob:; frame-src 'none'; object-src 'none'; worker-src 'none'; " +
+	"base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+
+// widgetSandbox sind die Freiheiten des Rahmens. Bewusst ohne allow-same-origin und allow-top-navigation.
+const widgetSandbox = "allow-scripts allow-forms allow-modals allow-downloads"
+
+func widgetMsg(widgetID, userID, exp int64) string {
+	return strconv.FormatInt(widgetID, 10) + "|" + strconv.FormatInt(userID, 10) + "|" + strconv.FormatInt(exp, 10)
+}
+
+func (s *Server) widgetToken(widgetID, userID int64) string {
+	exp := time.Now().Add(widgetTokenTTL).Unix()
+	sig := s.secrets.MAC("widget-file", widgetMsg(widgetID, userID, exp))
+	return strconv.FormatInt(userID, 10) + "." + strconv.FormatInt(exp, 10) + "." + base64.RawURLEncoding.EncodeToString(sig[:18])
+}
+
+// checkWidgetToken liefert den Benutzer zur Marke, wenn sie echt und nicht abgelaufen ist.
+func (s *Server) checkWidgetToken(widgetID int64, tok string) (int64, bool) {
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		return 0, false
+	}
+	uid, err1 := strconv.ParseInt(parts[0], 10, 64)
+	exp, err2 := strconv.ParseInt(parts[1], 10, 64)
+	sig, err3 := base64.RawURLEncoding.DecodeString(parts[2])
+	if err1 != nil || err2 != nil || err3 != nil || time.Now().Unix() > exp {
+		return 0, false
+	}
+	want := s.secrets.MAC("widget-file", widgetMsg(widgetID, uid, exp))
+	return uid, hmac.Equal(sig, want[:18])
+}
+
+// canSee meldet, ob jemand mit diesem Zugriff das Widget sehen darf.
+// Administratoren sehen alle, Verwalter auch inaktive (zum Testen), sonst additiv über Rollen.
+func canSee(g *authz.Graph, acc *authz.Access, w *widgets.Widget) bool {
+	if acc.IsAdmin(g) || acc.Has(authz.PermWidgetsManage) {
+		return true
+	}
+	if !w.Active {
+		return false
+	}
+	for _, id := range w.RoleIDs {
+		if _, ok := acc.Roles[id]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func widgetURL(id int64) string { return "/widgets/" + strconv.FormatInt(id, 10) }
+
+func (s *Server) widgetList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	all, err := s.widgets.List(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	g, acc := CurrentAccess(ctx)
+	var list []*widgets.Widget
+	for _, wd := range all {
+		if canSee(g, acc, wd) {
+			list = append(list, wd)
+		}
+	}
+	s.render(w, r, http.StatusOK, "widgets", map[string]any{
+		"User":    CurrentUser(ctx),
+		"Widgets": list,
+	})
+}
+
+// loadVisibleWidget liest das Widget aus dem Pfad. Unsichtbares gibt 404.
+func (s *Server) loadVisibleWidget(w http.ResponseWriter, r *http.Request) (*widgets.Widget, bool) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		s.notFound(w, r)
+		return nil, false
+	}
+	wd, err := s.widgets.ByID(r.Context(), id)
+	if errors.Is(err, widgets.ErrNotFound) {
+		s.notFound(w, r)
+		return nil, false
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return nil, false
+	}
+	g, acc := CurrentAccess(r.Context())
+	if !canSee(g, acc, wd) {
+		s.notFound(w, r)
+		return nil, false
+	}
+	return wd, true
+}
+
+func (s *Server) widgetView(w http.ResponseWriter, r *http.Request) {
+	wd, ok := s.loadVisibleWidget(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	src := "/w/" + strconv.FormatInt(wd.ID, 10) + "/" + s.widgetToken(wd.ID, CurrentUser(ctx).ID) + "/" + wd.Entry
+	s.render(w, r, http.StatusOK, "widget_view", map[string]any{
+		"User":    CurrentUser(ctx),
+		"Widget":  wd,
+		"Src":     src,
+		"Sandbox": widgetSandbox,
+	})
+}
+
+// widgetFile liefert eine Datei aus dem Paket an den abgeschotteten Rahmen.
+// Rechte werden bei jeder Datei neu geprüft: Wer die Rolle verliert, sieht das Widget sofort nicht mehr.
+func (s *Server) widgetFile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, ok := pathID(r, "id")
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	uid, ok := s.checkWidgetToken(id, r.PathValue("tok"))
+	if !ok {
+		http.Error(w, "Zugang abgelaufen. Bitte die Seite neu laden.", http.StatusForbidden)
+		return
+	}
+	u, err := s.users.ByID(ctx, uid)
+	if err != nil || !u.IsActive || u.IsService {
+		http.Error(w, "Kein Zugriff.", http.StatusForbidden)
+		return
+	}
+	wd, err := s.widgets.ByID(ctx, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	g, acc, err := s.roles.Access(ctx, uid)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !canSee(g, acc, wd) {
+		http.NotFound(w, r)
+		return
+	}
+	ct, data, err := s.widgets.File(ctx, id, r.PathValue("path"))
+	if errors.Is(err, widgets.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Security-Policy", widgetCSP)
+	h.Set("X-Frame-Options", "SAMEORIGIN")
+	h.Set("Content-Type", ct)
+	h.Set("Cache-Control", "private, max-age=60")
+	// Module und Schriften lädt der Rahmen mit leerer Herkunft per CORS. Die Marke in der Adresse schützt die Datei.
+	h.Set("Access-Control-Allow-Origin", "*")
+	h.Set("Cross-Origin-Resource-Policy", "cross-origin")
+	w.Write(data)
+}
+
+// --- Verwaltung ---
+
+func (s *Server) adminWidgets(w http.ResponseWriter, r *http.Request) {
+	s.renderAdminWidgets(w, r, http.StatusOK, "")
+}
+
+func (s *Server) renderAdminWidgets(w http.ResponseWriter, r *http.Request, status int, problem string) {
+	ctx := r.Context()
+	list, err := s.widgets.List(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	g, _ := CurrentAccess(ctx)
+	type row struct {
+		*widgets.Widget
+		Roles []string
+	}
+	rows := make([]row, len(list))
+	for i, wd := range list {
+		rows[i] = row{Widget: wd, Roles: g.PathNames(wd.RoleIDs)}
+	}
+	s.render(w, r, status, "admin_widgets", map[string]any{
+		"User":    CurrentUser(ctx),
+		"Widgets": rows,
+		"Flash":   s.sessions.PopString(ctx, sessFlash),
+		"Error":   problem,
+		"MaxMB":   widgets.MaxUpload >> 20,
+	})
+}
+
+func (s *Server) adminUploadWidget(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	r.Body = http.MaxBytesReader(w, r.Body, widgets.MaxUpload+1<<20)
+	file, _, err := r.FormFile("package")
+	if err != nil {
+		s.renderAdminWidgets(w, r, http.StatusUnprocessableEntity, "Bitte eine ZIP-Datei bis "+strconv.Itoa(widgets.MaxUpload>>20)+" MB auswählen.")
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, widgets.MaxUpload+1))
+	if err != nil || len(data) > widgets.MaxUpload {
+		s.renderAdminWidgets(w, r, http.StatusUnprocessableEntity, "Die ZIP-Datei ist größer als "+strconv.Itoa(widgets.MaxUpload>>20)+" MB.")
+		return
+	}
+	pkg, err := widgets.Parse(data)
+	var ie widgets.InputError
+	if errors.As(err, &ie) {
+		s.renderAdminWidgets(w, r, http.StatusUnprocessableEntity, ie.Error())
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	id, old, err := s.widgets.Install(ctx, pkg, CurrentUser(ctx).ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	m := pkg.Manifest
+	msg := "Widget „" + m.Name + "“ " + m.Version + " installiert. Lege jetzt fest, welche Rollen es sehen."
+	event := "widget_installed"
+	if old == m.Version {
+		msg = "Widget „" + m.Name + "“ " + m.Version + " neu eingespielt. Sichtbarkeit bleibt wie bisher."
+		event = "widget_updated"
+	} else if old != "" {
+		msg = "Widget „" + m.Name + "“ von " + old + " auf " + m.Version + " aktualisiert. Sichtbarkeit bleibt wie bisher."
+		event = "widget_updated"
+	}
+	s.auditDetail(r, 0, event, m.ID+" "+m.Version+" durch "+CurrentUser(ctx).Username)
+	s.flashRedirect(w, r, msg, adminWidgetURL(id))
+}
+
+func adminWidgetURL(id int64) string { return "/admin/widgets/" + strconv.FormatInt(id, 10) }
+
+func (s *Server) loadAdminWidget(w http.ResponseWriter, r *http.Request) (*widgets.Widget, bool) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		s.notFound(w, r)
+		return nil, false
+	}
+	wd, err := s.widgets.ByID(r.Context(), id)
+	if errors.Is(err, widgets.ErrNotFound) {
+		s.notFound(w, r)
+		return nil, false
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return nil, false
+	}
+	return wd, true
+}
+
+func (s *Server) adminWidgetDetail(w http.ResponseWriter, r *http.Request) {
+	wd, ok := s.loadAdminWidget(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	roles, err := s.roles.ListRoles(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	selected := map[int64]bool{}
+	for _, id := range wd.RoleIDs {
+		selected[id] = true
+	}
+	s.render(w, r, http.StatusOK, "admin_widget", map[string]any{
+		"User":     CurrentUser(ctx),
+		"Widget":   wd,
+		"Roles":    roles,
+		"Selected": selected,
+		"Flash":    s.sessions.PopString(ctx, sessFlash),
+	})
+}
+
+func (s *Server) adminSetWidgetRoles(w http.ResponseWriter, r *http.Request) {
+	wd, ok := s.loadAdminWidget(w, r)
+	if !ok {
+		return
+	}
+	ids := formIDs(r, "role")
+	if err := s.widgets.SetRoles(r.Context(), wd.ID, ids); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	g, _ := CurrentAccess(r.Context())
+	s.auditDetail(r, 0, "widget_roles_changed", wd.Slug+" durch "+CurrentUser(r.Context()).Username+": "+strings.Join(g.PathNames(ids), ", "))
+	s.flashRedirect(w, r, "Sichtbarkeit von „"+wd.Name+"“ gespeichert.", adminWidgetURL(wd.ID))
+}
+
+func (s *Server) adminActivateWidget(w http.ResponseWriter, r *http.Request) {
+	s.adminSetWidgetActive(w, r, true)
+}
+func (s *Server) adminDeactivateWidget(w http.ResponseWriter, r *http.Request) {
+	s.adminSetWidgetActive(w, r, false)
+}
+
+func (s *Server) adminSetWidgetActive(w http.ResponseWriter, r *http.Request, active bool) {
+	wd, ok := s.loadAdminWidget(w, r)
+	if !ok {
+		return
+	}
+	if err := s.widgets.SetActive(r.Context(), wd.ID, active); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	event, msg := "widget_deactivated", "„"+wd.Name+"“ ist inaktiv. Nur Verwalter sehen es noch."
+	if active {
+		event, msg = "widget_activated", "„"+wd.Name+"“ ist aktiv."
+	}
+	s.auditDetail(r, 0, event, wd.Slug+" durch "+CurrentUser(r.Context()).Username)
+	s.flashRedirect(w, r, msg, adminWidgetURL(wd.ID))
+}
+
+func (s *Server) adminDeleteWidget(w http.ResponseWriter, r *http.Request) {
+	wd, ok := s.loadAdminWidget(w, r)
+	if !ok {
+		return
+	}
+	if r.PostFormValue("confirm") != "on" {
+		s.flashRedirect(w, r, "Zum Entfernen bitte das Häkchen „wirklich entfernen“ setzen.", adminWidgetURL(wd.ID))
+		return
+	}
+	if err := s.widgets.Delete(r.Context(), wd.ID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.auditDetail(r, 0, "widget_deleted", wd.Slug+" "+wd.Version+" durch "+CurrentUser(r.Context()).Username)
+	s.flashRedirect(w, r, "Widget „"+wd.Name+"“ entfernt.", "/admin/widgets")
+}

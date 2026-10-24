@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"image/png"
@@ -76,8 +78,10 @@ func CheckTOTP(secret, code string, lastStep int64, now time.Time) (step int64, 
 }
 
 // SecretBox verschlüsselt TOTP-Secrets mit AES-256-GCM, bevor sie in die Datenbank gehen.
+// Außerdem signiert sie kurzlebige Zugangsmarken (MAC) mit einem davon abgeleiteten Schlüssel.
 type SecretBox struct {
-	aead cipher.AEAD
+	aead   cipher.AEAD
+	macKey []byte
 }
 
 // NewSecretBox erwartet einen 32-Byte-Schlüssel.
@@ -93,7 +97,18 @@ func NewSecretBox(key []byte) (*SecretBox, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SecretBox{aead: aead}, nil
+	derive := hmac.New(sha256.New, key)
+	derive.Write([]byte("mwf-mac-v1"))
+	return &SecretBox{aead: aead, macKey: derive.Sum(nil)}, nil
+}
+
+// MAC signiert msg für einen Zweck, damit eine Marke nicht für etwas anderes taugt.
+func (b *SecretBox) MAC(purpose, msg string) []byte {
+	m := hmac.New(sha256.New, b.macKey)
+	m.Write([]byte(purpose))
+	m.Write([]byte{0})
+	m.Write([]byte(msg))
+	return m.Sum(nil)
 }
 
 // Seal liefert Nonce + Chiffrat.

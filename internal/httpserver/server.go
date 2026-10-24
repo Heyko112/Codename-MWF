@@ -14,6 +14,7 @@ import (
 	"github.com/Heyko112/codename-mwf/internal/auth"
 	"github.com/Heyko112/codename-mwf/internal/authz"
 	"github.com/Heyko112/codename-mwf/internal/tables"
+	"github.com/Heyko112/codename-mwf/internal/widgets"
 )
 
 // Server bündelt die Abhängigkeiten der Handler.
@@ -25,11 +26,12 @@ type Server struct {
 	users     *auth.Store
 	roles     *authz.Store
 	tables    *tables.Store
+	widgets   *widgets.Store
 	secrets   *auth.SecretBox
 }
 
 func New(db *sql.DB, sessions *scs.SessionManager, templates Templates, static fs.FS, secrets *auth.SecretBox) *Server {
-	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), roles: authz.NewStore(db), tables: tables.NewStore(db), secrets: secrets}
+	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), roles: authz.NewStore(db), tables: tables.NewStore(db), widgets: widgets.NewStore(db), secrets: secrets}
 }
 
 // Handler registriert alle Routen und legt die Middleware-Kette darum.
@@ -88,7 +90,20 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("GET /daten/{id}/{rec}", s.requireLogin(s.dataRecord))
 	pages.HandleFunc("POST /daten/{id}/{rec}", s.requireLogin(s.dataUpdate))
 	pages.HandleFunc("POST /daten/{id}/{rec}/loeschen", s.requireLogin(s.dataDelete))
+
+	pages.HandleFunc("GET /widgets", s.requireLogin(s.widgetList))
+	pages.HandleFunc("GET /widgets/{id}", s.requireLogin(s.widgetView))
+	wdg := func(h http.HandlerFunc) http.HandlerFunc { return s.requirePerm(authz.PermWidgetsManage, h) }
+	pages.HandleFunc("GET /admin/widgets", wdg(s.adminWidgets))
+	pages.HandleFunc("POST /admin/widgets", wdg(s.adminUploadWidget))
+	pages.HandleFunc("GET /admin/widgets/{id}", wdg(s.adminWidgetDetail))
+	pages.HandleFunc("POST /admin/widgets/{id}/rollen", wdg(s.adminSetWidgetRoles))
+	pages.HandleFunc("POST /admin/widgets/{id}/aktivieren", wdg(s.adminActivateWidget))
+	pages.HandleFunc("POST /admin/widgets/{id}/deaktivieren", wdg(s.adminDeactivateWidget))
+	pages.HandleFunc("POST /admin/widgets/{id}/loeschen", wdg(s.adminDeleteWidget))
 	pages.HandleFunc("/", s.notFound)
+	// Dateien für den abgeschotteten Widget-Rahmen: ohne Sitzung, geschützt durch die Marke in der Adresse
+	mux.HandleFunc("GET /w/{id}/{tok}/{path...}", s.widgetFile)
 	mux.Handle("/", s.sessions.LoadAndSave(pages))
 
 	return Chain(mux, RequestID, Logging, Recover, SecurityHeaders, CSRF)

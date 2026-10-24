@@ -209,3 +209,13 @@ fieldset.plain { border: 0; padding: 0; margin: 0; }
 .req { color: #c0392b; }
 input:disabled, textarea:disabled { opacity: 0.8; }
 @media (prefers-color-scheme: dark) { .field-error { color: #ffb4b4; } }
+.widget-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.widget-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); text-decoration: none; }
+.widget-card:hover { border-color: var(--accent); }
+.content:has(.widget-frame) { max-width: none; padding-bottom: 16px; }
+.widget-head { margin: 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.widget-frame { display: block; width: 100%; height: calc(100vh - 150px); min-height: 400px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+table.facts th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 16px 4px 0; vertical-align: top; }
+table.facts td { padding: 4px 0; }
+pre.code { overflow-x: auto; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
+input[type=file] { padding: 8px; }
