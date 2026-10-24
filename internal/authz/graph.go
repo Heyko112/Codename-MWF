@@ -12,9 +12,10 @@ import (
 
 // Rechte. Neue Rechte werden hier ergänzt, die Datenbank speichert nur den Code.
 const (
-	PermUsersManage  = "users.manage"
-	PermRolesManage  = "roles.manage"
-	PermTablesDefine = "tables.define"
+	PermUsersManage   = "users.manage"
+	PermRolesManage   = "roles.manage"
+	PermTablesDefine  = "tables.define"
+	PermWidgetsManage = "widgets.manage"
 )
 
 // Permission beschreibt ein Recht für die Oberfläche.
@@ -28,6 +29,7 @@ var AllPermissions = []Permission{
 	{PermUsersManage, "Benutzer verwalten"},
 	{PermRolesManage, "Rollen und Rechte verwalten"},
 	{PermTablesDefine, "Tabellen definieren"},
+	{PermWidgetsManage, "Widgets verwalten"},
 }
 
 // PermissionLabel liefert den Anzeigenamen eines Rechts.

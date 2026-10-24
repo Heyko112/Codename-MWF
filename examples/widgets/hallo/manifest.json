@@ -1,0 +1,8 @@
+{
+  "id": "hallo",
+  "name": "Hallo",
+  "version": "1.0.0",
+  "description": "Beispiel-Widget: zeigt, dass ein Widget abgeschottet läuft und Dialoge öffnen kann.",
+  "size": "small",
+  "entry": "index.html"
+}

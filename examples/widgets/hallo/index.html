@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hallo</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <h1>Hallo aus einem Widget</h1>
+    <p class="clock" id="clock">–</p>
+
+    <section>
+      <h2>Bedienung</h2>
+      <button id="count" type="button">Klicks: 0</button>
+      <button id="open" type="button">Dialog öffnen</button>
+    </section>
+
+    <section>
+      <h2>Abschottung</h2>
+      <ul id="checks"></ul>
+    </section>
+  </main>
+
+  <dialog id="dlg">
+    <h2>Ein Dialog im Widget</h2>
+    <p>Fenster, Popups und Overlays laufen im Widget selbst. Im Vollbild gehört ihm die ganze Fläche.</p>
+    <form method="dialog"><button>Schließen</button></form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{{define "title"}}{{.Widget.Name}} · Widgets · MWF{{end}}
+{{define "content"}}
+<div class="toolbar">
+  <p class="widget-head"><a href="/widgets">← Widgets</a> <strong>{{.Widget.Name}}</strong> <span class="muted">{{.Widget.Version}}</span>
+    {{if not .Widget.Active}}<span class="badge badge-warn">inaktiv, nur für Verwalter sichtbar</span>{{end}}</p>
+  {{if index .Can "widgets.manage"}}<a href="/admin/widgets/{{.Widget.ID}}">Verwalten</a>{{end}}
+</div>
+<iframe class="widget-frame" src="{{.Src}}" sandbox="{{.Sandbox}}" referrerpolicy="no-referrer" title="{{.Widget.Name}}"></iframe>
+{{end}}

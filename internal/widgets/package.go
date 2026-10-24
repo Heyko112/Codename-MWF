@@ -1,0 +1,204 @@
+// Package widgets verwaltet Widget-Pakete: kleine Webapps, die abgeschottet in MWF laufen.
+package widgets
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"path"
+	"regexp"
+	"strings"
+	"unicode/utf8"
+)
+
+// Grenzen für ein Paket, damit eine ZIP-Datei den Server nicht überlastet.
+const (
+	MaxUpload    = 10 << 20 // ZIP-Datei
+	MaxFiles     = 500
+	MaxFileSize  = 5 << 20  // eine entpackte Datei
+	MaxTotalSize = 20 << 20 // alle entpackten Dateien
+)
+
+// InputError ist ein Fehler im Paket, den der Benutzer selbst beheben kann.
+type InputError string
+
+func (e InputError) Error() string { return string(e) }
+
+// Manifest ist der Inhalt von manifest.json. Weitere Felder (z. B. tables, settings) bleiben im Rohtext erhalten.
+type Manifest struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Description string `json:"description"`
+	Size        string `json:"size"`
+	Entry       string `json:"entry"`
+}
+
+// Package ist ein geprüftes, entpacktes Paket.
+type Package struct {
+	Manifest Manifest
+	Raw      string // manifest.json wie geliefert
+	Files    map[string]File
+}
+
+type File struct {
+	ContentType string
+	Data        []byte
+}
+
+// Sizes sind die erlaubten Kachelgrößen.
+var Sizes = map[string]string{"small": "klein", "wide": "breit", "large": "groß"}
+
+// contentTypes sind die erlaubten Dateitypen. Alles andere wird abgelehnt.
+var contentTypes = map[string]string{
+	".html":  "text/html; charset=utf-8",
+	".js":    "text/javascript; charset=utf-8",
+	".mjs":   "text/javascript; charset=utf-8",
+	".css":   "text/css; charset=utf-8",
+	".json":  "application/json",
+	".map":   "application/json",
+	".txt":   "text/plain; charset=utf-8",
+	".md":    "text/plain; charset=utf-8",
+	".svg":   "image/svg+xml",
+	".png":   "image/png",
+	".jpg":   "image/jpeg",
+	".jpeg":  "image/jpeg",
+	".gif":   "image/gif",
+	".webp":  "image/webp",
+	".ico":   "image/x-icon",
+	".woff":  "font/woff",
+	".woff2": "font/woff2",
+	".ttf":   "font/ttf",
+}
+
+var (
+	idRe      = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
+	versionRe = regexp.MustCompile(`^\d{1,6}\.\d{1,6}\.\d{1,6}$`)
+	pathRe    = regexp.MustCompile(`^[A-Za-z0-9._\-/]{1,255}$`)
+)
+
+// ignored sind Dateien, die Packprogramme von selbst hinzufügen.
+func ignored(name string) bool {
+	base := path.Base(name)
+	return strings.HasPrefix(name, "__MACOSX/") || base == ".DS_Store" || base == "Thumbs.db" || base == "desktop.ini"
+}
+
+// Parse entpackt und prüft ein Paket. Liegen alle Dateien in einem gemeinsamen Ordner
+// (so packt Windows „Senden an ZIP“), wird dieser Ordner entfernt.
+func Parse(data []byte) (*Package, error) {
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, InputError("Die Datei ist keine gültige ZIP-Datei.")
+	}
+	var names []string
+	entries := map[string]*zip.File{}
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() || ignored(f.Name) {
+			continue
+		}
+		names = append(names, f.Name)
+		entries[f.Name] = f
+	}
+	prefix := commonFolder(names)
+	if len(names) > MaxFiles {
+		return nil, InputError(fmt.Sprintf("Das Paket enthält mehr als %d Dateien.", MaxFiles))
+	}
+	pkg := &Package{Files: map[string]File{}}
+	var total int64
+	for _, name := range names {
+		f := entries[name]
+		p := strings.TrimPrefix(name, prefix)
+		if !pathRe.MatchString(p) || path.Clean(p) != p || strings.HasPrefix(p, "/") || strings.Contains(p, "..") {
+			return nil, InputError("Ungültiger Dateiname im Paket: „" + name + "“. Erlaubt sind Buchstaben, Ziffern, Punkt, Minus, Unterstrich und Schrägstrich.")
+		}
+		ct, ok := contentTypes[strings.ToLower(path.Ext(p))]
+		if !ok {
+			return nil, InputError("Dateityp nicht erlaubt: „" + p + "“.")
+		}
+		if f.UncompressedSize64 > MaxFileSize {
+			return nil, InputError("Datei zu groß (über 5 MB): „" + p + "“.")
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, InputError("Datei im Paket ist beschädigt: „" + p + "“.")
+		}
+		// Der Größe im ZIP-Verzeichnis nicht blind trauen: höchstens MaxFileSize+1 lesen
+		b, err := io.ReadAll(io.LimitReader(rc, MaxFileSize+1))
+		rc.Close()
+		if err != nil {
+			return nil, InputError("Datei im Paket ist beschädigt: „" + p + "“.")
+		}
+		if len(b) > MaxFileSize {
+			return nil, InputError("Datei zu groß (über 5 MB): „" + p + "“.")
+		}
+		if total += int64(len(b)); total > MaxTotalSize {
+			return nil, InputError("Das entpackte Paket ist größer als 20 MB.")
+		}
+		pkg.Files[p] = File{ContentType: ct, Data: b}
+	}
+	mf, ok := pkg.Files["manifest.json"]
+	if !ok {
+		return nil, InputError("Im Paket fehlt die Datei manifest.json.")
+	}
+	if err := json.Unmarshal(mf.Data, &pkg.Manifest); err != nil {
+		return nil, InputError("manifest.json ist kein gültiges JSON: " + err.Error())
+	}
+	pkg.Raw = string(mf.Data)
+	if err := pkg.check(); err != nil {
+		return nil, err
+	}
+	return pkg, nil
+}
+
+func commonFolder(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	for _, n := range names {
+		if n == "manifest.json" {
+			return ""
+		}
+	}
+	first, _, ok := strings.Cut(names[0], "/")
+	if !ok {
+		return ""
+	}
+	prefix := first + "/"
+	for _, n := range names {
+		if !strings.HasPrefix(n, prefix) {
+			return ""
+		}
+	}
+	return prefix
+}
+
+func (p *Package) check() error {
+	m := &p.Manifest
+	m.Name = strings.TrimSpace(m.Name)
+	m.Description = strings.TrimSpace(m.Description)
+	if m.Size == "" {
+		m.Size = "small"
+	}
+	if m.Entry == "" {
+		m.Entry = "index.html"
+	}
+	switch {
+	case !idRe.MatchString(m.ID):
+		return InputError("manifest.json: „id“ muss aus Kleinbuchstaben, Ziffern und Minus bestehen (höchstens 64 Zeichen), z. B. „umsatz-heute“.")
+	case m.Name == "" || utf8.RuneCountInString(m.Name) > 64:
+		return InputError("manifest.json: „name“ muss 1 bis 64 Zeichen lang sein.")
+	case !versionRe.MatchString(m.Version):
+		return InputError("manifest.json: „version“ muss wie 1.0.0 aussehen.")
+	case utf8.RuneCountInString(m.Description) > 255:
+		return InputError("manifest.json: „description“ darf höchstens 255 Zeichen lang sein.")
+	case Sizes[m.Size] == "":
+		return InputError("manifest.json: „size“ muss small, wide oder large sein.")
+	}
+	entry, ok := p.Files[m.Entry]
+	if !ok || !strings.HasPrefix(entry.ContentType, "text/html") {
+		return InputError("manifest.json: Die Startdatei „" + m.Entry + "“ fehlt im Paket oder ist keine HTML-Datei.")
+	}
+	return nil
+}

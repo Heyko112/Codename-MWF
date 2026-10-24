@@ -1,0 +1,55 @@
+{{define "title"}}{{.Widget.Name}} · Widgets verwalten · MWF{{end}}
+{{define "content"}}
+<p><a href="/admin/widgets">← Widgets verwalten</a></p>
+<h1>{{.Widget.Name}} {{if .Widget.Active}}<span class="badge badge-on">aktiv</span>{{else}}<span class="badge badge-warn">inaktiv</span>{{end}}</h1>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+<p><a class="button" href="/widgets/{{.Widget.ID}}">Öffnen</a></p>
+
+<div class="grid">
+<div class="card">
+  <h2>Paket</h2>
+  <table class="facts">
+    <tr><th>ID</th><td><code>{{.Widget.Slug}}</code></td></tr>
+    <tr><th>Version</th><td>{{.Widget.Version}}</td></tr>
+    <tr><th>Beschreibung</th><td>{{with .Widget.Description}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td></tr>
+    <tr><th>Kachelgröße</th><td>{{.Widget.SizeLabel}}</td></tr>
+    <tr><th>Startdatei</th><td><code>{{.Widget.Entry}}</code></td></tr>
+    <tr><th>Dateien</th><td>{{.Widget.FileCount}} ({{.Widget.TotalBytes}} Byte)</td></tr>
+    <tr><th>Installiert</th><td>{{.Widget.InstalledAt.Local.Format "02.01.2006 15:04"}}{{if .Widget.UpdatedAt.Valid}}, aktualisiert {{.Widget.UpdatedAt.Time.Local.Format "02.01.2006 15:04"}}{{end}}</td></tr>
+  </table>
+  <details><summary>manifest.json</summary><pre class="code">{{.Widget.Manifest}}</pre></details>
+</div>
+
+<div class="card">
+  <h2>Sichtbar für Rollen</h2>
+  <p class="hint">Gilt für alle Mitglieder, auch über enthaltene Rollen. „Administratoren“ und Verwalter sehen alle Widgets.</p>
+  <form method="post" action="/admin/widgets/{{.Widget.ID}}/rollen">
+    {{range .Roles}}{{if not .System}}
+    <label class="check"><input type="checkbox" name="role" value="{{.ID}}" {{if index $.Selected .ID}}checked{{end}}> {{.Name}}{{if .Hidden}} <span class="muted">(versteckt)</span>{{end}}</label>
+    {{end}}{{end}}
+    <button type="submit">Speichern</button>
+  </form>
+</div>
+</div>
+
+<div class="grid">
+<div class="card">
+  <h2>Status</h2>
+  {{if .Widget.Active}}
+  <p>Aktiv: Alle freigegebenen Rollen sehen das Widget.</p>
+  <form method="post" action="/admin/widgets/{{.Widget.ID}}/deaktivieren"><button type="submit">Deaktivieren</button></form>
+  {{else}}
+  <p>Inaktiv: Nur Verwalter sehen das Widget, zum Testen.</p>
+  <form method="post" action="/admin/widgets/{{.Widget.ID}}/aktivieren"><button type="submit">Aktivieren</button></form>
+  {{end}}
+</div>
+<div class="card">
+  <h2>Entfernen</h2>
+  <p>Entfernt das Widget mit allen Dateien. Das lässt sich nicht rückgängig machen.</p>
+  <form class="row" method="post" action="/admin/widgets/{{.Widget.ID}}/loeschen">
+    <label class="check"><input type="checkbox" name="confirm" required> wirklich entfernen</label>
+    <button type="submit" class="danger">Entfernen</button>
+  </form>
+</div>
+</div>
+{{end}}
