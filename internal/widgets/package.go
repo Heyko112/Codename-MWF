@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Heyko112/codename-mwf/internal/tables"
 )
 
 // Grenzen für ein Paket, damit eine ZIP-Datei den Server nicht überlastet.
@@ -28,12 +30,46 @@ func (e InputError) Error() string { return string(e) }
 
 // Manifest ist der Inhalt von manifest.json. Weitere Felder (z. B. tables, settings) bleiben im Rohtext erhalten.
 type Manifest struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Description string `json:"description"`
-	Size        string `json:"size"`
-	Entry       string `json:"entry"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Version     string         `json:"version"`
+	Description string         `json:"description"`
+	Size        string         `json:"size"`
+	Entry       string         `json:"entry"`
+	Tables      []TableRequest `json:"tables"`
+}
+
+// TableRequest ist eine Tabelle, die das Widget anfordert. Das Widget kennt nur den Alias,
+// welche echte Tabelle dahinter steckt, legt der Admin bei der Installation fest.
+type TableRequest struct {
+	Alias       string   `json:"alias"`
+	Access      []string `json:"access"`
+	Description string   `json:"description"`
+}
+
+// Perms wandelt die angeforderten Rechte um.
+func (t TableRequest) Perms() tables.Perms {
+	var p tables.Perms
+	for _, a := range t.Access {
+		switch a {
+		case "read":
+			p.Read = true
+		case "create":
+			p.Create = true
+		case "update":
+			p.Update = true
+		case "delete":
+			p.Delete = true
+		}
+	}
+	return p
+}
+
+// ParseManifest liest ein gespeichertes Manifest wieder ein.
+func ParseManifest(raw string) Manifest {
+	var m Manifest
+	json.Unmarshal([]byte(raw), &m)
+	return m
 }
 
 // Package ist ein geprüftes, entpacktes Paket.
@@ -77,6 +113,7 @@ var (
 	idRe      = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 	versionRe = regexp.MustCompile(`^\d{1,6}\.\d{1,6}\.\d{1,6}$`)
 	pathRe    = regexp.MustCompile(`^[A-Za-z0-9._\-/]{1,255}$`)
+	aliasRe   = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 )
 
 // ignored sind Dateien, die Packprogramme von selbst hinzufügen.
@@ -195,6 +232,27 @@ func (p *Package) check() error {
 		return InputError("manifest.json: „description“ darf höchstens 255 Zeichen lang sein.")
 	case Sizes[m.Size] == "":
 		return InputError("manifest.json: „size“ muss small, wide oder large sein.")
+	}
+	if len(m.Tables) > 20 {
+		return InputError("manifest.json: höchstens 20 Einträge unter „tables“.")
+	}
+	seen := map[string]bool{}
+	for _, t := range m.Tables {
+		if !aliasRe.MatchString(t.Alias) || seen[t.Alias] {
+			return InputError("manifest.json: „tables“: Jeder Alias muss eindeutig sein, mit einem Kleinbuchstaben beginnen und nur a–z, 0–9 und _ enthalten (höchstens 32 Zeichen).")
+		}
+		seen[t.Alias] = true
+		if len(t.Access) == 0 {
+			return InputError("manifest.json: „tables“: Bei „" + t.Alias + "“ fehlt „access“, z. B. [\"read\"].")
+		}
+		for _, a := range t.Access {
+			if a != "read" && a != "create" && a != "update" && a != "delete" {
+				return InputError("manifest.json: „tables“: Unbekanntes Recht „" + a + "“ bei „" + t.Alias + "“. Erlaubt sind read, create, update, delete.")
+			}
+		}
+		if utf8.RuneCountInString(t.Description) > 255 {
+			return InputError("manifest.json: „tables“: Beschreibung bei „" + t.Alias + "“ ist länger als 255 Zeichen.")
+		}
 	}
 	entry, ok := p.Files[m.Entry]
 	if !ok || !strings.HasPrefix(entry.ContentType, "text/html") {

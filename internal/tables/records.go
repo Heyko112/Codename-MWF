@@ -212,12 +212,14 @@ func (s *Store) InsertRecord(ctx context.Context, t *Table, values map[int64]any
 	return res.LastInsertId()
 }
 
-// UpdateRecord speichert alle Spalten eines Datensatzes.
+// UpdateRecord speichert die Spalten, die in values vorkommen. Fehlende Spalten bleiben unverändert.
 func (s *Store) UpdateRecord(ctx context.Context, t *Table, id int64, values map[int64]any, userID int64) error {
 	sets, args := []string{"updated_at = UTC_TIMESTAMP(6)", "updated_by = ?"}, []any{userID}
 	for _, c := range t.Columns {
-		sets = append(sets, columnIdent(c.ID)+" = ?")
-		args = append(args, values[c.ID])
+		if v, ok := values[c.ID]; ok {
+			sets = append(sets, columnIdent(c.ID)+" = ?")
+			args = append(args, v)
+		}
 	}
 	res, err := s.db.ExecContext(ctx, `UPDATE `+tableIdent(t.ID)+` SET `+strings.Join(sets, ", ")+` WHERE id = ?`, append(args, id)...)
 	if err != nil {

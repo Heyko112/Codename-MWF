@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Heyko112/codename-mwf/internal/tables"
 )
 
 var ErrNotFound = errors.New("Widget nicht gefunden")
@@ -119,6 +121,9 @@ func (s *Store) Install(ctx context.Context, p *Package, userID int64) (id int64
 			return 0, "", err
 		}
 	}
+	if err := syncGrants(ctx, tx, id, m.Tables); err != nil {
+		return 0, "", err
+	}
 	for path, f := range p.Files {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO widget_files (widget_id, path, content_type, data) VALUES (?, ?, ?, ?)`,
 			id, path, f.ContentType, f.Data); err != nil {
@@ -165,5 +170,92 @@ func (s *Store) SetActive(ctx context.Context, widgetID int64, active bool) erro
 
 func (s *Store) Delete(ctx context.Context, widgetID int64) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM widgets WHERE id = ?`, widgetID)
+	return err
+}
+
+// Grant ist eine angeforderte Tabelle mit dem, was der Admin zugeordnet und freigegeben hat.
+type Grant struct {
+	Alias       string
+	Description string
+	Requested   tables.Perms
+	TableID     sql.NullInt64
+	Granted     tables.Perms
+}
+
+// syncGrants gleicht die Freigaben mit dem Manifest ab. Bei einem Update bleibt eine Zuordnung erhalten,
+// die Freigabe schrumpft aber auf das, was das neue Manifest noch anfordert. Neue Rechte gibt nur der Admin.
+func syncGrants(ctx context.Context, tx *sql.Tx, widgetID int64, reqs []TableRequest) error {
+	keep := []any{widgetID}
+	for _, t := range reqs {
+		r := t.Perms()
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO widget_tables (widget_id, alias) VALUES (?, ?)
+			ON DUPLICATE KEY UPDATE can_read = can_read AND ?, can_create = can_create AND ?,
+				can_update = can_update AND ?, can_delete = can_delete AND ?`,
+			widgetID, t.Alias, r.Read, r.Create, r.Update, r.Delete); err != nil {
+			return err
+		}
+		keep = append(keep, t.Alias)
+	}
+	q := `DELETE FROM widget_tables WHERE widget_id = ?`
+	if len(keep) > 1 {
+		q += ` AND alias NOT IN (?` + strings.Repeat(",?", len(keep)-2) + `)`
+	}
+	_, err := tx.ExecContext(ctx, q, keep...)
+	return err
+}
+
+// Grants liefert die angeforderten Tabellen eines Widgets in der Reihenfolge des Manifests.
+func (s *Store) Grants(ctx context.Context, w *Widget) ([]Grant, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT alias, table_id, can_read, can_create, can_update, can_delete FROM widget_tables WHERE widget_id = ?`, w.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	stored := map[string]Grant{}
+	for rows.Next() {
+		var g Grant
+		if err := rows.Scan(&g.Alias, &g.TableID, &g.Granted.Read, &g.Granted.Create, &g.Granted.Update, &g.Granted.Delete); err != nil {
+			return nil, err
+		}
+		stored[g.Alias] = g
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var out []Grant
+	for _, t := range ParseManifest(w.Manifest).Tables {
+		g := stored[t.Alias]
+		g.Alias, g.Description, g.Requested = t.Alias, t.Description, t.Perms()
+		out = append(out, g)
+	}
+	return out, nil
+}
+
+// SetGrant ordnet einem Alias eine Tabelle zu (0 = keine) und setzt die Freigabe,
+// höchstens so viel, wie das Manifest anfordert.
+func (s *Store) SetGrant(ctx context.Context, w *Widget, alias string, tableID int64, p tables.Perms) error {
+	var req *TableRequest
+	for _, t := range ParseManifest(w.Manifest).Tables {
+		if t.Alias == alias {
+			req = &t
+			break
+		}
+	}
+	if req == nil {
+		return ErrNotFound
+	}
+	r := req.Perms()
+	p = tables.Perms{Read: p.Read && r.Read, Create: p.Create && r.Create, Update: p.Update && r.Update, Delete: p.Delete && r.Delete}
+	tid := sql.NullInt64{Int64: tableID, Valid: tableID > 0}
+	if !tid.Valid {
+		p = tables.Perms{}
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO widget_tables (widget_id, alias, table_id, can_read, can_create, can_update, can_delete) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE table_id = VALUES(table_id), can_read = VALUES(can_read), can_create = VALUES(can_create),
+			can_update = VALUES(can_update), can_delete = VALUES(can_delete)`,
+		w.ID, alias, tid, p.Read, p.Create, p.Update, p.Delete)
 	return err
 }

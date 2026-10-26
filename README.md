@@ -66,7 +66,37 @@ Ein Beispiel liegt in `examples/widgets/hallo`. Den Ordner `hallo` als ZIP packe
 { "id": "hallo", "name": "Hallo", "version": "1.0.0", "description": "…", "size": "small", "entry": "index.html" }
 ```
 
-`id`: Kleinbuchstaben, Ziffern, Minus. `size`: `small`, `wide` oder `large` (für die Startseite, kommt in D3). Datenzugriff aus dem Widget folgt in D2.
+`id`: Kleinbuchstaben, Ziffern, Minus. `size`: `small`, `wide` oder `large` (für die Startseite, kommt in D3).
+
+### Daten aus dem Widget
+
+Ein Widget fordert im Manifest Tabellen über einen Alias an. Unter `/admin/widgets/<id>` ordnet ein Verwalter jedem Alias eine echte Tabelle zu und gibt höchstens die angeforderten Rechte frei. Wirksam ist immer **Recht des Benutzers ∩ Freigabe des Widgets**: Über ein Widget kann niemand mehr als in der Tabelle selbst.
+
+```json
+"tables": [ { "alias": "notizen", "access": ["read", "create", "update", "delete"], "description": "Wofür das Widget die Tabelle braucht" } ]
+```
+
+Spalten spricht das Widget über ihren festen **Schlüssel** an (unter Tabellen verwalten sichtbar, bei Anlage optional selbst wählbar, danach unveränderlich). So darf eine Spalte umbenannt werden, ohne dass ein Widget bricht.
+
+Im Widget die Bibliothek einbinden, alle Aufrufe liefern ein Promise (Typen: `/static/mwf-widget.d.ts`):
+
+```html
+<script src="/static/mwf-widget.js"></script>
+```
+
+```js
+const t = await mwf.tables();                        // Aliase, wirksame Rechte, Spalten
+const { total, records } = await mwf.list("notizen", { limit: 50, search: "milch" });
+const rec = await mwf.create("notizen", { text: "Brot", erledigt: false });
+await mwf.update("notizen", rec.id, { erledigt: true }); // nur übergebene Spalten
+await mwf.remove("notizen", rec.id);
+```
+
+Werte: Text als String, Ganzzahl als Zahl, Dezimal als String (`"12.50"`), Datum `"YYYY-MM-DD"`, Datum/Uhrzeit `"YYYY-MM-DDTHH:MM:SS"`, Ja/Nein als `true`/`false`, leer als `null`. Fehler kommen als `mwf.MwfError` mit `code` (z. B. `forbidden`, `invalid`, `not_mapped`) und bei `invalid` mit `fields` je Spalte. Löschen über ein Widget steht im Audit-Log.
+
+Beispiel: `examples/widgets/notizen` (braucht eine Tabelle mit den Spalten `text` und `erledigt`).
+
+**Grenze:** Die Abschottung schützt MWF vor dem Widget. Ein Widget sieht aber die Daten, die es lesen darf, und könnte seinen eigenen Rahmen auf eine fremde Seite umleiten. Nur Widgets aus vertrauenswürdiger Quelle installieren.
 
 Die App ist standardmäßig nur auf dem eigenen Rechner erreichbar (`APP_BIND=127.0.0.1`). Zeiten werden in `Europe/Berlin` angezeigt (änderbar über `TZ` in der `.env`).
 

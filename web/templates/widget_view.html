@@ -5,5 +5,6 @@
     {{if not .Widget.Active}}<span class="badge badge-warn">inaktiv, nur für Verwalter sichtbar</span>{{end}}</p>
   {{if index .Can "widgets.manage"}}<a href="/admin/widgets/{{.Widget.ID}}">Verwalten</a>{{end}}
 </div>
-<iframe class="widget-frame" src="{{.Src}}" sandbox="{{.Sandbox}}" referrerpolicy="no-referrer" title="{{.Widget.Name}}"></iframe>
+<script src="/static/widget-host.js"></script>
+<iframe class="widget-frame" data-api="{{.API}}" src="{{.Src}}" sandbox="{{.Sandbox}}" referrerpolicy="no-referrer" title="{{.Widget.Name}}"></iframe>
 {{end}}

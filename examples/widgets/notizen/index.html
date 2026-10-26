@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notizen</title>
+<link rel="stylesheet" href="app.css">
+<script src="/static/mwf-widget.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<main>
+  <h1>Notizen</h1>
+  <p id="status" class="status" role="status">Lade …</p>
+  <form id="neu" hidden>
+    <input id="text" name="text" placeholder="Neue Notiz" autocomplete="off" required>
+    <button type="submit">Hinzufügen</button>
+  </form>
+  <ul id="liste"></ul>
+</main>
+</body>
+</html>

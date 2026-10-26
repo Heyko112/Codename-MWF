@@ -24,6 +24,7 @@ const (
 	ErrBadName   = InputError("Der Name muss 1 bis 64 Zeichen lang sein.")
 	ErrBadDesc   = InputError("Die Beschreibung darf höchstens 255 Zeichen lang sein.")
 	ErrBadType   = InputError("Unbekannter Feldtyp.")
+	ErrKeyTaken  = InputError("Den Schlüssel gibt es in dieser Tabelle schon.")
 	ErrShrink    = InputError("Die Länge kann nur vergrößert werden, sonst gehen Daten verloren.")
 )
 
@@ -42,6 +43,7 @@ type Column struct {
 	ID       int64
 	TableID  int64
 	Name     string
+	Key      string // technischer Schlüssel, fest ab Anlage
 	Type     string
 	Size     int
 	Required bool
@@ -120,7 +122,7 @@ func (s *Store) ByID(ctx context.Context, id int64) (*Table, error) {
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, table_id, name, type, size, required, position
+		SELECT id, table_id, name, COALESCE(col_key, ''), type, size, required, position
 		FROM data_columns WHERE table_id = ? ORDER BY position, id`, id)
 	if err != nil {
 		return nil, err
@@ -128,7 +130,7 @@ func (s *Store) ByID(ctx context.Context, id int64) (*Table, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var c Column
-		if err := rows.Scan(&c.ID, &c.TableID, &c.Name, &c.Type, &c.Size, &c.Required, &c.Position); err != nil {
+		if err := rows.Scan(&c.ID, &c.TableID, &c.Name, &c.Key, &c.Type, &c.Size, &c.Required, &c.Position); err != nil {
 			return nil, err
 		}
 		t.Columns = append(t.Columns, &c)
@@ -211,9 +213,9 @@ func (s *Store) Delete(ctx context.Context, id int64) error {
 func (s *Store) Column(ctx context.Context, tableID, colID int64) (*Column, error) {
 	var c Column
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, table_id, name, type, size, required, position
+		SELECT id, table_id, name, COALESCE(col_key, ''), type, size, required, position
 		FROM data_columns WHERE id = ? AND table_id = ?`, colID, tableID).
-		Scan(&c.ID, &c.TableID, &c.Name, &c.Type, &c.Size, &c.Required, &c.Position)
+		Scan(&c.ID, &c.TableID, &c.Name, &c.Key, &c.Type, &c.Size, &c.Required, &c.Position)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -231,11 +233,33 @@ func CheckSize(t *ColType, size int) (int, error) {
 	return size, nil
 }
 
-// AddColumn hängt eine Spalte hinten an.
-func (s *Store) AddColumn(ctx context.Context, tableID int64, name, typ string, size int, required bool) (int64, error) {
+// AddColumn hängt eine Spalte hinten an. Ohne key wird der Schlüssel aus dem Namen gebildet.
+func (s *Store) AddColumn(ctx context.Context, tableID int64, name, key, typ string, size int, required bool) (int64, error) {
 	name, err := CheckName(name)
 	if err != nil {
 		return 0, err
+	}
+	key = strings.TrimSpace(key)
+	if key != "" {
+		if err := CheckKey(key); err != nil {
+			return 0, err
+		}
+		if reserved[key] {
+			return 0, ErrKeyTaken
+		}
+	} else {
+		taken := map[string]bool{}
+		rows, err := s.db.QueryContext(ctx, `SELECT col_key FROM data_columns WHERE table_id = ? AND col_key IS NOT NULL`, tableID)
+		if err != nil {
+			return 0, err
+		}
+		for rows.Next() {
+			var k string
+			rows.Scan(&k)
+			taken[k] = true
+		}
+		rows.Close()
+		key = uniqueKey(MakeKey(name), taken)
 	}
 	t := TypeByCode(typ)
 	if t == nil {
@@ -245,9 +269,13 @@ func (s *Store) AddColumn(ctx context.Context, tableID int64, name, typ string, 
 		return 0, err
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO data_columns (table_id, name, type, size, required, position)
-		SELECT ?, ?, ?, ?, ?, COALESCE(MAX(position), 0) + 1 FROM data_columns WHERE table_id = ?`,
-		tableID, name, typ, size, required, tableID)
+		INSERT INTO data_columns (table_id, name, col_key, type, size, required, position)
+		SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX(position), 0) + 1 FROM data_columns WHERE table_id = ?`,
+		tableID, name, key, typ, size, required, tableID)
+	var me *mysql.MySQLError
+	if errors.As(err, &me) && me.Number == 1062 && strings.Contains(me.Message, "key_uq") {
+		return 0, ErrKeyTaken
+	}
 	if isDuplicate(err) {
 		return 0, ErrNameTaken
 	}

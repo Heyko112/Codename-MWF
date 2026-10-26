@@ -1,0 +1,15 @@
+{
+  "id": "notizen",
+  "name": "Notizen",
+  "version": "1.0.0",
+  "description": "Beispiel für die Daten-Brücke: Notizen anlegen, abhaken und löschen.",
+  "size": "wide",
+  "entry": "index.html",
+  "tables": [
+    {
+      "alias": "notizen",
+      "access": ["read", "create", "update", "delete"],
+      "description": "Notizen. Braucht die Spalten text (Text, Pflicht) und erledigt (Ja/Nein)."
+    }
+  ]
+}
