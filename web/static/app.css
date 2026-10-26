@@ -283,3 +283,14 @@ code { font-size: .9em; }
 .sec-settings { margin-top: 12px; }
 input.name-input { max-width: 320px; margin: 0; }
 .field-hint { margin: -10px 0 16px; }
+
+/* Widget-Verwaltung: angeforderte Tabellen */
+.setup { border-top: 1px solid var(--line); padding: 14px 0 6px; }
+.setup h3 { margin: 0 0 4px; display: flex; gap: 10px; align-items: center; font-size: 1rem; }
+.setup > p { margin: 6px 0; }
+.setup details { margin: 10px 0; }
+.setup summary { cursor: pointer; font-weight: 500; }
+.setup details > form { margin-top: 10px; }
+.setup-new table { margin: 4px 0 14px; }
+.setup-new td input { margin: 0; }
+.roles-pick .check { display: inline-flex; margin-right: 14px; }

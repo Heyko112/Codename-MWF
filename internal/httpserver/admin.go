@@ -12,11 +12,20 @@ import (
 	"github.com/Heyko112/codename-mwf/internal/authz"
 )
 
-const sessFlash = "flash"
+const (
+	sessFlash    = "flash"
+	sessFlashErr = "flash_error"
+)
 
 // flashRedirect merkt sich eine Meldung für die nächste Seite und leitet um.
 func (s *Server) flashRedirect(w http.ResponseWriter, r *http.Request, msg, to string) {
 	s.sessions.Put(r.Context(), sessFlash, msg)
+	http.Redirect(w, r, to, http.StatusSeeOther)
+}
+
+// errorRedirect merkt sich eine Fehlermeldung für die nächste Seite und leitet um.
+func (s *Server) errorRedirect(w http.ResponseWriter, r *http.Request, msg, to string) {
+	s.sessions.Put(r.Context(), sessFlashErr, msg)
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
