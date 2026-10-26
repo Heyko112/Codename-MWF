@@ -282,6 +282,12 @@ func (s *Server) adminUploadWidget(w http.ResponseWriter, r *http.Request) {
 		msg = "Widget „" + m.Name + "“ von " + old + " auf " + m.Version + " aktualisiert. Sichtbarkeit bleibt wie bisher."
 		event = "widget_updated"
 	}
+	if m.Import != nil {
+		msg = "Aus JobRouter übernommen. " + msg
+		if n := len(m.Import.Hints); n > 0 {
+			msg += " " + strconv.Itoa(n) + " offene Punkte stehen unter „Aus JobRouter übernommen“."
+		}
+	}
 	if hint := s.setupHint(ctx, wd); hint != "" {
 		msg += " " + hint
 	}
@@ -354,6 +360,7 @@ func (s *Server) adminWidgetDetail(w http.ResponseWriter, r *http.Request) {
 		"Tables":     tbls,
 		"Flash":      s.sessions.PopString(ctx, sessFlash),
 		"FlashError": s.sessions.PopString(ctx, sessFlashErr),
+		"Import":     widgets.ParseManifest(wd.Manifest).Import,
 	})
 }
 

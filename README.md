@@ -107,6 +107,12 @@ Beispiel: `examples/widgets/notizen` (mit Bauplan für die Tabelle).
 
 **Grenze:** Die Abschottung schützt MWF vor dem Widget. Ein Widget sieht aber die Daten, die es lesen darf, und könnte seinen eigenen Rahmen auf eine fremde Seite umleiten. Nur Widgets aus vertrauenswürdiger Quelle installieren.
 
+### JobRouter-Widgets übernehmen
+
+Ein JobRouter-Dashboard-Widget (ZIP mit `dashboard/<Anbieter>/<Name>/<Name>.php`, `template.hbs`, `app/…`) lässt sich direkt hochladen. MWF erkennt die PHP-Klasse und baut daraus ein Paket: Titel aus `getTitle()`, Größe aus `getDimensions()`, Startseite ist die App aus `getData()` (`appUrl`) bzw. `app/index.html`, sonst wird `template.hbs` mit `style.css` zur Seite. PHP läuft nicht: Datenbankabfragen, `isAuthorized()`, Aufrufe von `.php`-Dateien oder der REST-API und Zugriffe über `window.frameElement` stehen als offene Punkte auf der Widget-Seite („Aus JobRouter übernommen“, im Manifest unter `import.hints`).
+
+Für die volle Umwandlung (Daten-Brücke, Tabellen-Bauplan) das ZIP mit Claude und dem Skill „JobRouter-Widget nach MWF“ umwandeln und das Ergebnis als Update hochladen. Gleiche ID (Klassenname in Kleinbuchstaben mit Minus, z. B. `UmsatzHeute` → `umsatz-heute`) und höhere Version verwenden.
+
 ### Einstellungen je Widget
 
 Jedes Widget bekommt automatisch eine eigene Einstellungs-Tabelle (eine echte Tabelle mit genau einem Datensatz). Sie gehört dem Widget, taucht nicht unter Tabellen/Daten auf und wird mit dem Widget gelöscht. Welche Einstellungen es gibt, steht im Manifest:

@@ -38,6 +38,14 @@ type Manifest struct {
 	Entry       string         `json:"entry"`
 	Tables      []TableRequest `json:"tables"`
 	Settings    []SettingDef   `json:"settings"`
+	Import      *ImportInfo    `json:"import,omitempty"`
+}
+
+// ImportInfo steht im Manifest, wenn das Paket aus einem Widget eines anderen Systems umgewandelt wurde.
+type ImportInfo struct {
+	From  string   `json:"from"`  // z. B. "jobrouter"
+	Class string   `json:"class"` // ursprüngliche Widget-Klasse
+	Hints []string `json:"hints"` // was noch von Hand umzustellen ist
 }
 
 // SettingDef ist eine Einstellung des Widgets. Sie wird eine Spalte in der Einstellungs-Tabelle des Widgets.
@@ -187,17 +195,13 @@ func Parse(data []byte) (*Package, error) {
 	if len(names) > MaxFiles {
 		return nil, InputError(fmt.Sprintf("Das Paket enthält mehr als %d Dateien.", MaxFiles))
 	}
-	pkg := &Package{Files: map[string]File{}}
+	raw := map[string][]byte{}
 	var total int64
 	for _, name := range names {
 		f := entries[name]
 		p := strings.TrimPrefix(name, prefix)
 		if !pathRe.MatchString(p) || path.Clean(p) != p || strings.HasPrefix(p, "/") || strings.Contains(p, "..") {
 			return nil, InputError("Ungültiger Dateiname im Paket: „" + name + "“. Erlaubt sind Buchstaben, Ziffern, Punkt, Minus, Unterstrich und Schrägstrich.")
-		}
-		ct, ok := contentTypes[strings.ToLower(path.Ext(p))]
-		if !ok {
-			return nil, InputError("Dateityp nicht erlaubt: „" + p + "“.")
 		}
 		if f.UncompressedSize64 > MaxFileSize {
 			return nil, InputError("Datei zu groß (über 5 MB): „" + p + "“.")
@@ -217,6 +221,20 @@ func Parse(data []byte) (*Package, error) {
 		}
 		if total += int64(len(b)); total > MaxTotalSize {
 			return nil, InputError("Das entpackte Paket ist größer als 20 MB.")
+		}
+		raw[p] = b
+	}
+	if _, ok := raw["manifest.json"]; !ok {
+		// Ein JobRouter-Widget wird umgewandelt, so weit es ohne PHP geht
+		if conv, ok := fromJobRouter(raw); ok {
+			raw = conv
+		}
+	}
+	pkg := &Package{Files: map[string]File{}}
+	for p, b := range raw {
+		ct, ok := contentTypes[strings.ToLower(path.Ext(p))]
+		if !ok {
+			return nil, InputError("Dateityp nicht erlaubt: „" + p + "“.")
 		}
 		pkg.Files[p] = File{ContentType: ct, Data: b}
 	}

@@ -98,3 +98,62 @@ func TestParseBlueprint(t *testing.T) {
 		}
 	}
 }
+
+const jrPHP = `<?php
+namespace dashboard\MyWidgets\UmsatzHeute;
+use JobRouter\Api\Dashboard\v1\Widget;
+class UmsatzHeute extends Widget
+{
+    public function getTitle() { return 'Umsatz heute'; }
+    public function isAuthorized() { return $this->isCurrentUserInJobFunction('Vertrieb'); }
+    public function getDimensions() { return ['minWidth' => 2, 'minHeight' => 1]; }
+    public function getData()
+    {
+        $db = $this->getJobDB();
+        return ['appUrl' => 'dashboard/MyWidgets/UmsatzHeute/app/index.html?u=' . rawurlencode($this->getCurrentUsername()) . '&v=3'];
+    }
+}`
+
+func TestParseJobRouterApp(t *testing.T) {
+	p, err := Parse(zipOf(t, map[string]string{
+		"README.md": "x",
+		"dashboard/MyWidgets/UmsatzHeute/UmsatzHeute.php": jrPHP,
+		"dashboard/MyWidgets/UmsatzHeute/template.hbs":    `<iframe src="{{appUrl}}"></iframe>`,
+		"dashboard/MyWidgets/UmsatzHeute/style.css":       "x",
+		"dashboard/MyWidgets/UmsatzHeute/app/index.html":  `<script>var fe=window.frameElement; fetch('daten.php')</script>`,
+		"dashboard/MyWidgets/UmsatzHeute/app/app.js":      "1",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := p.Manifest
+	if m.ID != "umsatz-heute" || m.Name != "Umsatz heute" || m.Size != "wide" || m.Entry != "app/index.html" || m.Import == nil {
+		t.Fatalf("%+v", m)
+	}
+	if _, ok := p.Files["app/app.js"]; !ok || len(p.Files) != 4 { // index.html, app.js, style.css, manifest.json
+		t.Fatalf("%v", len(p.Files))
+	}
+	all := strings.Join(m.Import.Hints, "\n")
+	for _, want := range []string{"getJobDB", "isAuthorized", "daten.php", "frameElement", "mwf.context"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("Hinweis zu %s fehlt:\n%s", want, all)
+		}
+	}
+}
+
+func TestParseJobRouterTemplate(t *testing.T) {
+	php := `<?php class Hallo extends \JobRouter\Api\Dashboard\v1\Widget { public function getTitle(): string { return "Hallo <Welt>"; } public function isAuthorized() { return true; } }`
+	p, err := Parse(zipOf(t, map[string]string{
+		"Hallo/Hallo.php": php, "Hallo/template.hbs": `<p>Hallo {{name}}</p>{{#each items}}<i>{{this}}</i>{{/each}}`, "Hallo/style.css": "p{}",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := string(p.Files["index.html"].Data)
+	if p.Manifest.Entry != "index.html" || strings.Contains(idx, "{{") || !strings.Contains(idx, "Hallo &lt;Welt&gt;") || !strings.Contains(idx, "style.css") {
+		t.Fatal(idx)
+	}
+	if h := strings.Join(p.Manifest.Import.Hints, "\n"); !strings.Contains(h, "name, items") || strings.Contains(h, "isAuthorized") {
+		t.Fatal(h)
+	}
+}

@@ -294,3 +294,5 @@ input.name-input { max-width: 320px; margin: 0; }
 .setup-new table { margin: 4px 0 14px; }
 .setup-new td input { margin: 0; }
 .roles-pick .check { display: inline-flex; margin-right: 14px; }
+.todo { margin: 0 0 12px; padding-left: 20px; }
+.todo li { margin: 4px 0; }

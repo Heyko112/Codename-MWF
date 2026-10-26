@@ -33,6 +33,20 @@
 </div>
 </div>
 
+{{with .Import}}
+<div class="card">
+  <h2>Aus JobRouter übernommen</h2>
+  <p class="hint">Umgewandelt aus der Widget-Klasse <code>{{.Class}}</code>. Übernommen sind Oberfläche, Titel und Größe. PHP läuft in MWF nicht.</p>
+  {{if .Hints}}
+  <p>Noch umzustellen:</p>
+  <ul class="todo">{{range .Hints}}<li>{{.}}</li>{{end}}</ul>
+  <p class="hint">Für die volle Umwandlung (Daten-Brücke, Tabellen-Bauplan) das JobRouter-ZIP mit Claude und dem Skill „JobRouter-Widget nach MWF“ umwandeln und das Ergebnis hier als Update hochladen.</p>
+  {{else}}
+  <p>Keine offenen Punkte gefunden. Das Widget sollte so laufen.</p>
+  {{end}}
+</div>
+{{end}}
+
 {{if .Setups}}
 <div class="card">
   <h2>Daten</h2>
