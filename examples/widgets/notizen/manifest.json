@@ -1,7 +1,7 @@
 {
   "id": "notizen",
   "name": "Notizen",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Beispiel für die Daten-Brücke: Notizen anlegen, abhaken und löschen.",
   "size": "wide",
   "entry": "index.html",

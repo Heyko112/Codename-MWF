@@ -55,6 +55,10 @@ interface MwfError extends Error {
 }
 
 interface Mwf {
+  /** "kachel" auf der Startseite, sonst "vollbild". Steht auch als data-ansicht an <html>. */
+  view: "kachel" | "vollbild";
+  /** gewähltes Design, "" = wie das Betriebssystem. Steht auch als data-theme an <html>. */
+  theme: "light" | "dark" | "";
   MwfError: { new (code: string, message: string, fields?: Record<string, string>): MwfError };
   context(): Promise<MwfContext>;
   tables(): Promise<MwfTable[]>;

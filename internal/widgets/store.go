@@ -259,3 +259,31 @@ func (s *Store) SetGrant(ctx context.Context, w *Widget, alias string, tableID i
 		w.ID, alias, tid, p.Read, p.Create, p.Update, p.Delete)
 	return err
 }
+
+// Favorites liefert die Widget-IDs, die ein Benutzer als Favorit markiert hat, in der Reihenfolge des Markierens.
+func (s *Store) Favorites(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT widget_id FROM widget_favorites WHERE user_id = ? ORDER BY created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// SetFavorite markiert ein Widget für einen Benutzer als Favorit oder hebt das auf.
+func (s *Store) SetFavorite(ctx context.Context, userID, widgetID int64, on bool) error {
+	q := `DELETE FROM widget_favorites WHERE user_id = ? AND widget_id = ?`
+	if on {
+		q = `INSERT IGNORE INTO widget_favorites (user_id, widget_id) VALUES (?, ?)`
+	}
+	_, err := s.db.ExecContext(ctx, q, userID, widgetID)
+	return err
+}

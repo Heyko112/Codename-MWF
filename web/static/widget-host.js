@@ -1,17 +1,25 @@
-// widget-host.js läuft auf der MWF-Seite um den Widget-Rahmen.
-// Es nimmt Anfragen des Widgets per postMessage an und reicht sie mit der Sitzung des Benutzers an die API weiter.
-// Das Widget selbst hat keine Cookies und kommt so nur an das, was Benutzer und Freigabe erlauben.
+// widget-host.js läuft auf der MWF-Seite um die Widget-Rahmen (Vollbild oder Kacheln der Startseite).
+// Es nimmt Anfragen der Widgets per postMessage an und reicht sie mit der Sitzung des Benutzers an die API weiter.
+// Die Widgets selbst haben keine Cookies und kommen so nur an das, was Benutzer und Freigabe erlauben.
 (function () {
   "use strict";
   var MAX_PENDING = 20;
   var pending = 0;
 
-  function frame() { return document.querySelector("iframe.widget-frame"); }
+  // frameOf findet den Rahmen, aus dem die Nachricht kam. Jeder Rahmen kennt die API seines Widgets.
+  function frameOf(source) {
+    var frames = document.querySelectorAll("iframe.widget-frame");
+    for (var i = 0; i < frames.length; i++) {
+      if (frames[i].contentWindow === source) return frames[i];
+    }
+    return null;
+  }
 
   window.addEventListener("message", function (ev) {
-    var f = frame();
-    // Nur Nachrichten aus dem eigenen Widget-Rahmen (sandbox ohne allow-same-origin hat die Herkunft "null")
-    if (!f || ev.source !== f.contentWindow || ev.origin !== "null") return;
+    // Nur Nachrichten aus einem Widget-Rahmen (sandbox ohne allow-same-origin hat die Herkunft "null")
+    if (ev.origin !== "null") return;
+    var f = frameOf(ev.source);
+    if (!f || !f.dataset.api) return;
     var m = ev.data;
     if (!m || m.mwf !== 1 || typeof m.method !== "string" || (typeof m.id !== "number" && typeof m.id !== "string")) return;
     var target = ev.source;

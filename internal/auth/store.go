@@ -31,6 +31,7 @@ type User struct {
 	FailedLogins int
 	LockedUntil  sql.NullTime
 	LastLoginAt  sql.NullTime
+	Theme        string // "" = wie das Betriebssystem, "light" oder "dark"
 }
 
 // Locked meldet, ob das Konto gerade gesperrt ist.
@@ -48,14 +49,14 @@ type Store struct {
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
 const userColumns = `id, username, display_name, is_hidden, is_service, password_hash, totp_secret, totp_enabled,
-	totp_last_step, is_active, failed_logins, locked_until, last_login_at`
+	totp_last_step, is_active, failed_logins, locked_until, last_login_at, theme`
 
 type scanner interface{ Scan(dest ...any) error }
 
 func scanUser(row scanner) (*User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.IsHidden, &u.IsService, &u.PasswordHash, &u.TOTPSecret, &u.TOTPEnabled,
-		&u.TOTPLastStep, &u.IsActive, &u.FailedLogins, &u.LockedUntil, &u.LastLoginAt)
+		&u.TOTPLastStep, &u.IsActive, &u.FailedLogins, &u.LockedUntil, &u.LastLoginAt, &u.Theme)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -182,5 +183,17 @@ func (s *Store) Audit(ctx context.Context, userID int64, event, detail, ip, user
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO audit_log (user_id, event, detail, ip, user_agent) VALUES (?, ?, ?, ?, ?)`,
 		uid, event, det, ip, userAgent)
+	return err
+}
+
+// Themes sind die wählbaren Designs. "" folgt dem Betriebssystem.
+var Themes = map[string]bool{"": true, "light": true, "dark": true}
+
+// SetTheme speichert das gewählte Design eines Benutzers.
+func (s *Store) SetTheme(ctx context.Context, id int64, theme string) error {
+	if !Themes[theme] {
+		return errors.New("unbekanntes Design")
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE users SET theme = ? WHERE id = ?`, theme, id)
 	return err
 }

@@ -1,9 +1,18 @@
 {{define "title"}}{{.Widget.Name}} · Widgets · MWF{{end}}
+{{define "wide"}} wide full{{end}}
 {{define "content"}}
 <div class="toolbar">
-  <p class="widget-head"><a href="/widgets">← Widgets</a> <strong>{{.Widget.Name}}</strong> <span class="muted">{{.Widget.Version}}</span>
-    {{if not .Widget.Active}}<span class="badge badge-warn">inaktiv, nur für Verwalter sichtbar</span>{{end}}</p>
-  {{if index .Can "widgets.manage"}}<a href="/admin/widgets/{{.Widget.ID}}">Verwalten</a>{{end}}
+  <div class="widget-head">
+    <h1>{{.Widget.Name}}</h1>
+    <form method="post" action="/widgets/{{.Widget.ID}}/favorit">
+      <input type="hidden" name="back" value="{{.Path}}">
+      <input type="hidden" name="on" value="{{if .Favorite}}0{{else}}1{{end}}">
+      <button type="submit" class="star{{if .Favorite}} on{{end}}" title="{{if .Favorite}}Aus Favoriten entfernen{{else}}Zu Favoriten{{end}}" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}">{{template "ic-star"}}</button>
+    </form>
+    <span class="muted">{{.Widget.Version}}</span>
+    {{if not .Widget.Active}}<span class="badge badge-warn">inaktiv, nur für Verwalter sichtbar</span>{{end}}
+  </div>
+  {{if index .Can "widgets.manage"}}<a class="button ghost" href="/admin/widgets/{{.Widget.ID}}">Verwalten</a>{{end}}
 </div>
 <script src="/static/widget-host.js"></script>
 <iframe class="widget-frame" data-api="{{.API}}" src="{{.Src}}" sandbox="{{.Sandbox}}" referrerpolicy="no-referrer" title="{{.Widget.Name}}"></iframe>

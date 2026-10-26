@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -87,9 +88,19 @@ func (s *Server) widgetList(w http.ResponseWriter, r *http.Request) {
 			list = append(list, wd)
 		}
 	}
+	favs, err := s.widgets.Favorites(ctx, CurrentUser(ctx).ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	fav := map[int64]bool{}
+	for _, id := range favs {
+		fav[id] = true
+	}
 	s.render(w, r, http.StatusOK, "widgets", map[string]any{
 		"User":    CurrentUser(ctx),
 		"Widgets": list,
+		"Fav":     fav,
 	})
 }
 
@@ -123,13 +134,19 @@ func (s *Server) widgetView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	src := "/w/" + strconv.FormatInt(wd.ID, 10) + "/" + s.widgetToken(wd.ID, CurrentUser(ctx).ID) + "/" + wd.Entry
+	u := CurrentUser(ctx)
+	favs, err := s.widgets.Favorites(ctx, u.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	s.render(w, r, http.StatusOK, "widget_view", map[string]any{
-		"User":    CurrentUser(ctx),
-		"Widget":  wd,
-		"Src":     src,
-		"API":     "/api/widgets/" + strconv.FormatInt(wd.ID, 10) + "/call",
-		"Sandbox": widgetSandbox,
+		"User":     u,
+		"Widget":   wd,
+		"Src":      s.widgetSrc(wd, u, "vollbild"),
+		"API":      widgetAPIURL(wd.ID),
+		"Sandbox":  widgetSandbox,
+		"Favorite": slices.Contains(favs, wd.ID),
 	})
 }
 

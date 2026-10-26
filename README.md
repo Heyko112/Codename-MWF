@@ -98,6 +98,17 @@ Beispiel: `examples/widgets/notizen` (braucht eine Tabelle mit den Spalten `text
 
 **Grenze:** Die Abschottung schützt MWF vor dem Widget. Ein Widget sieht aber die Daten, die es lesen darf, und könnte seinen eigenen Rahmen auf eine fremde Seite umleiten. Nur Widgets aus vertrauenswürdiger Quelle installieren.
 
+## Startseite und Design
+
+Die Startseite besteht aus **Bereichen** (Reitern), zum Beispiel Übersicht, Vertrieb, Team. Mit dem Recht „Widgets verwalten“ legst du sie unter **Startseite** (`/admin/startseite`) an:
+
+- Ein Bereich ohne Rolle ist für alle sichtbar, sonst für die gewählten Rollen (additiv, auch über enthaltene Rollen).
+- In jeden Bereich legst du Widgets als **Kacheln** und ordnest sie mit den Pfeilen. Die Größe (klein, breit, groß) kommt aus dem Manifest des Widgets.
+- Eine Kachel sieht nur, wer das Widget selbst sehen darf. Jeder Benutzer kann Kacheln für sich ausblenden und unten auf der Startseite wieder einblenden.
+- Mit dem Stern in einem geöffneten Widget legt jeder Benutzer es als Favorit in seine Seitenleiste.
+
+Unten in der Seitenleiste wählt jeder Benutzer sein Design: **Hell**, **Dunkel** oder **Auto** (wie das Betriebssystem). Widgets bekommen Ansicht und Design über die Adresse (`?ansicht=kachel|vollbild&design=light|dark`). `mwf-widget.js` setzt daraus `data-ansicht` und `data-theme` an `<html>` und bietet `mwf.view` und `mwf.theme`. Beispiele: `examples/widgets/uhr` und `examples/widgets/notizen`.
+
 Die App ist standardmäßig nur auf dem eigenen Rechner erreichbar (`APP_BIND=127.0.0.1`). Zeiten werden in `Europe/Berlin` angezeigt (änderbar über `TZ` in der `.env`).
 
 ## Login und Sicherheit
