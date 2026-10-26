@@ -177,7 +177,7 @@ func (s *Server) adminAddColumn(w http.ResponseWriter, r *http.Request) {
 	if ct := tables.TypeByCode(typ); ct != nil && ct.SizeLabel != "" && strings.TrimSpace(r.PostFormValue("size")) == "" {
 		size = ct.DefaultSize
 	}
-	_, err := s.tables.AddColumn(r.Context(), t.ID, name, typ, size, r.PostFormValue("required") == "on")
+	_, err := s.tables.AddColumn(r.Context(), t.ID, name, r.PostFormValue("key"), typ, size, r.PostFormValue("required") == "on")
 	if err != nil && userError(err) {
 		s.flashRedirect(w, r, err.Error(), tableURL(t.ID))
 		return

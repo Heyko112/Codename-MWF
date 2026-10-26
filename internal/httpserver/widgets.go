@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Heyko112/codename-mwf/internal/authz"
+	"github.com/Heyko112/codename-mwf/internal/tables"
 	"github.com/Heyko112/codename-mwf/internal/widgets"
 )
 
@@ -127,6 +128,7 @@ func (s *Server) widgetView(w http.ResponseWriter, r *http.Request) {
 		"User":    CurrentUser(ctx),
 		"Widget":  wd,
 		"Src":     src,
+		"API":     "/api/widgets/" + strconv.FormatInt(wd.ID, 10) + "/call",
 		"Sandbox": widgetSandbox,
 	})
 }
@@ -293,11 +295,23 @@ func (s *Server) adminWidgetDetail(w http.ResponseWriter, r *http.Request) {
 	for _, id := range wd.RoleIDs {
 		selected[id] = true
 	}
+	grants, err := s.widgets.Grants(ctx, wd)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	tbls, err := s.tables.List(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	s.render(w, r, http.StatusOK, "admin_widget", map[string]any{
 		"User":     CurrentUser(ctx),
 		"Widget":   wd,
 		"Roles":    roles,
 		"Selected": selected,
+		"Grants":   grants,
+		"Tables":   tbls,
 		"Flash":    s.sessions.PopString(ctx, sessFlash),
 	})
 }
@@ -315,6 +329,46 @@ func (s *Server) adminSetWidgetRoles(w http.ResponseWriter, r *http.Request) {
 	g, _ := CurrentAccess(r.Context())
 	s.auditDetail(r, 0, "widget_roles_changed", wd.Slug+" durch "+CurrentUser(r.Context()).Username+": "+strings.Join(g.PathNames(ids), ", "))
 	s.flashRedirect(w, r, "Sichtbarkeit von „"+wd.Name+"“ gespeichert.", adminWidgetURL(wd.ID))
+}
+
+// adminSetWidgetTable ordnet einem angeforderten Alias eine Tabelle zu und gibt Rechte frei.
+func (s *Server) adminSetWidgetTable(w http.ResponseWriter, r *http.Request) {
+	wd, ok := s.loadAdminWidget(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	alias := r.PostFormValue("alias")
+	tableID, _ := strconv.ParseInt(r.PostFormValue("table"), 10, 64)
+	tableName := "keine"
+	if tableID > 0 {
+		t, err := s.tables.ByID(ctx, tableID)
+		if err != nil {
+			s.flashRedirect(w, r, "Diese Tabelle gibt es nicht mehr.", adminWidgetURL(wd.ID))
+			return
+		}
+		tableName = t.Name
+	}
+	p := tables.Perms{
+		Read:   r.PostFormValue("read") == "on",
+		Create: r.PostFormValue("create") == "on",
+		Update: r.PostFormValue("update") == "on",
+		Delete: r.PostFormValue("delete") == "on",
+	}
+	err := s.widgets.SetGrant(ctx, wd, alias, tableID, p)
+	if errors.Is(err, widgets.ErrNotFound) {
+		s.notFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if tableID == 0 {
+		p = tables.Perms{}
+	}
+	s.auditDetail(r, 0, "widget_table_changed", wd.Slug+" "+alias+" → "+tableName+" ("+permLetters(p)+") durch "+CurrentUser(ctx).Username)
+	s.flashRedirect(w, r, "Tabelle für „"+alias+"“ gespeichert.", adminWidgetURL(wd.ID))
 }
 
 func (s *Server) adminActivateWidget(w http.ResponseWriter, r *http.Request) {

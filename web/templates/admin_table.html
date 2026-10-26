@@ -9,13 +9,14 @@
 {{if .Table.Columns}}
 <div class="table-wrap">
 <table class="list">
-  <thead><tr><th>Name</th><th>Typ</th><th>Länge</th><th>Pflicht</th><th></th><th>Reihenfolge</th><th>Löschen</th></tr></thead>
+  <thead><tr><th>Name</th><th>Schlüssel</th><th>Typ</th><th>Länge</th><th>Pflicht</th><th></th><th>Reihenfolge</th><th>Löschen</th></tr></thead>
   <tbody>
   {{$t := .Table}}
   {{range $i, $c := .Table.Columns}}
     <tr>
       <td><form id="col-{{.ID}}" method="post" action="/admin/tabellen/{{$t.ID}}/spalten/{{.ID}}"></form>
         <input form="col-{{.ID}}" name="name" required maxlength="64" value="{{.Name}}" aria-label="Name"></td>
+      <td><code>{{.Key}}</code></td>
       <td>{{.TypeLabel}}</td>
       <td>{{if eq .Type "text"}}<input form="col-{{.ID}}" class="num" name="size" type="number" min="{{.Size}}" max="1000" value="{{.Size}}" aria-label="Länge">{{else}}<span class="muted">–</span>{{end}}</td>
       <td><input form="col-{{.ID}}" type="checkbox" name="required" {{if .Required}}checked{{end}} aria-label="Pflichtfeld"></td>
@@ -41,6 +42,9 @@
   <form method="post" action="/admin/tabellen/{{.Table.ID}}/spalten">
     <label>Name
       <input name="name" required maxlength="64" autocomplete="off">
+    </label>
+    <label>Schlüssel (optional, für Widgets; sonst aus dem Namen gebildet)
+      <input name="key" maxlength="64" pattern="[a-z][a-z0-9_]*" autocomplete="off" placeholder="z. B. firma">
     </label>
     <label>Typ
       <select name="type" required>

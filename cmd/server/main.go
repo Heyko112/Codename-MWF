@@ -21,6 +21,7 @@ import (
 	"github.com/Heyko112/codename-mwf/internal/config"
 	"github.com/Heyko112/codename-mwf/internal/db"
 	"github.com/Heyko112/codename-mwf/internal/httpserver"
+	"github.com/Heyko112/codename-mwf/internal/tables"
 	"github.com/Heyko112/codename-mwf/web"
 )
 
@@ -60,6 +61,9 @@ func run() error {
 
 	if err := db.Migrate(ctx, database); err != nil {
 		return err
+	}
+	if err := tables.NewStore(database).BackfillKeys(ctx); err != nil {
+		return fmt.Errorf("Spaltenschlüssel nachtragen: %w", err)
 	}
 
 	sessions := scs.New()

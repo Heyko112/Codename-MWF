@@ -93,11 +93,13 @@ func (s *Server) Handler() http.Handler {
 
 	pages.HandleFunc("GET /widgets", s.requireLogin(s.widgetList))
 	pages.HandleFunc("GET /widgets/{id}", s.requireLogin(s.widgetView))
+	pages.HandleFunc("POST /api/widgets/{id}/call", s.requireLogin(s.widgetAPI))
 	wdg := func(h http.HandlerFunc) http.HandlerFunc { return s.requirePerm(authz.PermWidgetsManage, h) }
 	pages.HandleFunc("GET /admin/widgets", wdg(s.adminWidgets))
 	pages.HandleFunc("POST /admin/widgets", wdg(s.adminUploadWidget))
 	pages.HandleFunc("GET /admin/widgets/{id}", wdg(s.adminWidgetDetail))
 	pages.HandleFunc("POST /admin/widgets/{id}/rollen", wdg(s.adminSetWidgetRoles))
+	pages.HandleFunc("POST /admin/widgets/{id}/tabellen", wdg(s.adminSetWidgetTable))
 	pages.HandleFunc("POST /admin/widgets/{id}/aktivieren", wdg(s.adminActivateWidget))
 	pages.HandleFunc("POST /admin/widgets/{id}/deaktivieren", wdg(s.adminDeactivateWidget))
 	pages.HandleFunc("POST /admin/widgets/{id}/loeschen", wdg(s.adminDeleteWidget))
