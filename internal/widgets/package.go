@@ -37,6 +37,27 @@ type Manifest struct {
 	Size        string         `json:"size"`
 	Entry       string         `json:"entry"`
 	Tables      []TableRequest `json:"tables"`
+	Settings    []SettingDef   `json:"settings"`
+}
+
+// SettingDef ist eine Einstellung des Widgets. Sie wird eine Spalte in der Einstellungs-Tabelle des Widgets.
+type SettingDef struct {
+	Key         string          `json:"key"`
+	Name        string          `json:"name"`
+	Type        string          `json:"type"`
+	Size        int             `json:"size"`
+	Required    bool            `json:"required"`
+	Default     json.RawMessage `json:"default"`
+	Description string          `json:"description"`
+}
+
+// Column beschreibt die Einstellung als Spalte (Größe mit Vorgabe des Typs).
+func (d SettingDef) Column() *tables.Column {
+	c := &tables.Column{Key: d.Key, Name: d.Name, Type: d.Type, Size: d.Size, Required: d.Required}
+	if t := tables.TypeByCode(d.Type); t != nil && c.Size == 0 {
+		c.Size = t.DefaultSize
+	}
+	return c
 }
 
 // TableRequest ist eine Tabelle, die das Widget anfordert. Das Widget kennt nur den Alias,
@@ -254,9 +275,48 @@ func (p *Package) check() error {
 			return InputError("manifest.json: „tables“: Beschreibung bei „" + t.Alias + "“ ist länger als 255 Zeichen.")
 		}
 	}
+	if err := checkSettings(m.Settings); err != nil {
+		return err
+	}
 	entry, ok := p.Files[m.Entry]
 	if !ok || !strings.HasPrefix(entry.ContentType, "text/html") {
 		return InputError("manifest.json: Die Startdatei „" + m.Entry + "“ fehlt im Paket oder ist keine HTML-Datei.")
+	}
+	return nil
+}
+
+func checkSettings(defs []SettingDef) error {
+	if len(defs) > 30 {
+		return InputError("manifest.json: höchstens 30 Einträge unter „settings“.")
+	}
+	keys, names := map[string]bool{}, map[string]bool{}
+	for _, d := range defs {
+		prefix := "manifest.json: „settings“ „" + d.Key + "“: "
+		if err := tables.CheckKey(d.Key); err != nil || keys[d.Key] {
+			return InputError("manifest.json: „settings“: Jeder „key“ muss eindeutig sein, mit einem Kleinbuchstaben beginnen und nur a–z, 0–9 und _ enthalten.")
+		}
+		keys[d.Key] = true
+		name, err := tables.CheckName(d.Name)
+		if err != nil || names[name] {
+			return InputError(prefix + "„name“ muss eindeutig und 1 bis 64 Zeichen lang sein.")
+		}
+		names[name] = true
+		t := tables.TypeByCode(d.Type)
+		if t == nil {
+			return InputError(prefix + "unbekannter „type“. Erlaubt sind text, longtext, int, decimal, date, datetime, bool.")
+		}
+		c := d.Column()
+		if _, err := tables.CheckSize(t, c.Size); err != nil {
+			return InputError(prefix + err.Error())
+		}
+		if len(d.Default) > 0 {
+			if _, err := tables.FromJSON(c, d.Default); err != nil {
+				return InputError(prefix + "„default“ passt nicht zum Typ: " + err.Error())
+			}
+		}
+		if utf8.RuneCountInString(d.Description) > 255 {
+			return InputError(prefix + "„description“ ist länger als 255 Zeichen.")
+		}
 	}
 	return nil
 }

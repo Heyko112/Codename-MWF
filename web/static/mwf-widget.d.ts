@@ -62,6 +62,8 @@ interface Mwf {
   MwfError: { new (code: string, message: string, fields?: Record<string, string>): MwfError };
   context(): Promise<MwfContext>;
   tables(): Promise<MwfTable[]>;
+  /** Einstellungen aus manifest.json "settings", Werte vom Verwalter, nach Schlüssel */
+  settings(): Promise<Record<string, MwfValue>>;
   /** neueste zuerst */
   list(table: string, options?: MwfListOptions): Promise<{ total: number; records: MwfRecord[] }>;
   get(table: string, id: number): Promise<MwfRecord>;

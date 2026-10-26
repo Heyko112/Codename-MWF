@@ -66,6 +66,17 @@
 </div>
 {{end}}
 
+{{if .Settings}}
+<div class="card">
+  <h2>Einstellungen</h2>
+  <p class="hint">Gelten für alle Benutzer des Widgets. Das Widget liest sie mit <code>mwf.settings()</code>. Gespeichert in einer eigenen Tabelle, die zum Widget gehört.</p>
+  <form method="post" action="/admin/widgets/{{.Widget.ID}}/einstellungen" class="narrow-left">
+    {{template "fields" .Settings}}
+    <button type="submit">Speichern</button>
+  </form>
+</div>
+{{end}}
+
 <div class="grid">
 <div class="card">
   <h2>Status</h2>

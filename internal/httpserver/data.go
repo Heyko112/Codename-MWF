@@ -150,6 +150,7 @@ type field struct {
 	Value   string
 	Checked bool
 	Error   string
+	Hint    string
 }
 
 // renderRecord zeigt das Formular für einen neuen oder bestehenden Datensatz.

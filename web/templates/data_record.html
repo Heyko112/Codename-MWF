@@ -8,21 +8,8 @@
 <div class="card narrow-left">
   <form method="post" action="{{with .Record}}/daten/{{$.Table.ID}}/{{.ID}}{{else}}/daten/{{.Table.ID}}/neu{{end}}">
   <fieldset class="plain" {{if not .Editable}}disabled{{end}}>
-  {{range .Fields}}{{$name := printf "c%d" .Col.ID}}
-    {{if eq .Col.Type "bool"}}
-    <label class="check"><input type="checkbox" name="{{$name}}" {{if .Checked}}checked{{end}}> {{.Col.Name}}</label>
-    {{else}}
-    <label>{{.Col.Name}}{{if .Col.Required}} <span class="req" title="Pflichtfeld">*</span>{{end}}
-      {{if eq .Col.Type "longtext"}}<textarea name="{{$name}}" rows="5" {{if .Col.Required}}required{{end}}>{{.Value}}</textarea>
-      {{else if eq .Col.Type "date"}}<input type="date" name="{{$name}}" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
-      {{else if eq .Col.Type "datetime"}}<input type="datetime-local" name="{{$name}}" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
-      {{else if eq .Col.Type "int"}}<input name="{{$name}}" inputmode="numeric" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
-      {{else if eq .Col.Type "decimal"}}<input name="{{$name}}" inputmode="decimal" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
-      {{else}}<input name="{{$name}}" maxlength="{{.Col.Size}}" value="{{.Value}}" {{if .Col.Required}}required{{end}}>{{end}}
-    </label>
-    {{end}}
-    {{with .Error}}<p class="field-error">{{.}}</p>{{end}}
-  {{else}}<p class="muted">Die Tabelle hat noch keine Spalten.</p>{{end}}
+  {{template "fields" .Fields}}
+  {{if not .Fields}}<p class="muted">Die Tabelle hat noch keine Spalten.</p>{{end}}
   {{if .Editable}}<button type="submit">{{if .Record}}Speichern{{else}}Anlegen{{end}}</button>{{end}}
   </fieldset>
   </form>

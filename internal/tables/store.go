@@ -36,6 +36,7 @@ type Table struct {
 	ColumnCount int
 	RowCount    int64
 	Columns     []*Column
+	WidgetID    sql.NullInt64 // gesetzt bei der Einstellungs-Tabelle eines Widgets
 }
 
 // Column ist eine Spalte einer Tabelle.
@@ -68,6 +69,14 @@ type Store struct {
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
+// userRef: 0 heißt „vom System“ (z. B. beim Serverstart) und wird als NULL gespeichert.
+func userRef(id int64) any {
+	if id == 0 {
+		return nil
+	}
+	return id
+}
+
 func isDuplicate(err error) bool {
 	var me *mysql.MySQLError
 	return errors.As(err, &me) && me.Number == 1062
@@ -86,7 +95,7 @@ func CheckName(name string) (string, error) {
 func (s *Store) List(ctx context.Context) ([]*Table, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT t.id, t.name, t.description, (SELECT COUNT(*) FROM data_columns c WHERE c.table_id = t.id)
-		FROM data_tables t ORDER BY t.name`)
+		FROM data_tables t WHERE t.widget_id IS NULL ORDER BY t.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -110,11 +119,13 @@ func (s *Store) List(ctx context.Context) ([]*Table, error) {
 	return list, nil
 }
 
+// List enthält keine Einstellungs-Tabellen von Widgets, die verwaltet das Widget selbst.
+
 // ByID liefert eine Tabelle mit ihren Spalten in Anzeigereihenfolge.
 func (s *Store) ByID(ctx context.Context, id int64) (*Table, error) {
 	var t Table
-	err := s.db.QueryRowContext(ctx, `SELECT id, name, description FROM data_tables WHERE id = ?`, id).
-		Scan(&t.ID, &t.Name, &t.Description)
+	err := s.db.QueryRowContext(ctx, `SELECT id, name, description, widget_id FROM data_tables WHERE id = ?`, id).
+		Scan(&t.ID, &t.Name, &t.Description, &t.WidgetID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -150,7 +161,7 @@ func (s *Store) Create(ctx context.Context, name, description string, userID int
 		return 0, err
 	}
 	res, err := s.db.ExecContext(ctx, `INSERT INTO data_tables (name, description, created_by) VALUES (?, ?, ?)`,
-		name, description, userID)
+		name, description, userRef(userID))
 	if isDuplicate(err) {
 		return 0, ErrNameTaken
 	}

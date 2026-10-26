@@ -199,7 +199,7 @@ func (s *Store) RecordByID(ctx context.Context, t *Table, id int64) (*Record, er
 // InsertRecord legt einen Datensatz an. values enthält bereits geprüfte Werte je Spalten-ID.
 func (s *Store) InsertRecord(ctx context.Context, t *Table, values map[int64]any, userID int64) (int64, error) {
 	// Zeiten immer in UTC speichern, angezeigt wird in der Zeitzone der App
-	cols, marks, args := []string{"created_at", "created_by"}, []string{"UTC_TIMESTAMP(6)", "?"}, []any{userID}
+	cols, marks, args := []string{"created_at", "created_by"}, []string{"UTC_TIMESTAMP(6)", "?"}, []any{userRef(userID)}
 	for _, c := range t.Columns {
 		cols = append(cols, columnIdent(c.ID))
 		marks = append(marks, "?")
@@ -214,7 +214,7 @@ func (s *Store) InsertRecord(ctx context.Context, t *Table, values map[int64]any
 
 // UpdateRecord speichert die Spalten, die in values vorkommen. Fehlende Spalten bleiben unverändert.
 func (s *Store) UpdateRecord(ctx context.Context, t *Table, id int64, values map[int64]any, userID int64) error {
-	sets, args := []string{"updated_at = UTC_TIMESTAMP(6)", "updated_by = ?"}, []any{userID}
+	sets, args := []string{"updated_at = UTC_TIMESTAMP(6)", "updated_by = ?"}, []any{userRef(userID)}
 	for _, c := range t.Columns {
 		if v, ok := values[c.ID]; ok {
 			sets = append(sets, columnIdent(c.ID)+" = ?")

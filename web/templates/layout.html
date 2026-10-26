@@ -56,6 +56,26 @@
 </body>
 </html>{{end}}
 
+{{/* Eingabefelder für Datensätze und Widget-Einstellungen, Name je Spalte c<ID> */}}
+{{define "fields"}}
+  {{range .}}{{$name := printf "c%d" .Col.ID}}
+    {{if eq .Col.Type "bool"}}
+    <label class="check"><input type="checkbox" name="{{$name}}" {{if .Checked}}checked{{end}}> {{.Col.Name}}</label>
+    {{else}}
+    <label>{{.Col.Name}}{{if .Col.Required}} <span class="req" title="Pflichtfeld">*</span>{{end}}
+      {{if eq .Col.Type "longtext"}}<textarea name="{{$name}}" rows="5" {{if .Col.Required}}required{{end}}>{{.Value}}</textarea>
+      {{else if eq .Col.Type "date"}}<input type="date" name="{{$name}}" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
+      {{else if eq .Col.Type "datetime"}}<input type="datetime-local" name="{{$name}}" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
+      {{else if eq .Col.Type "int"}}<input name="{{$name}}" inputmode="numeric" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
+      {{else if eq .Col.Type "decimal"}}<input name="{{$name}}" inputmode="decimal" value="{{.Value}}" {{if .Col.Required}}required{{end}}>
+      {{else}}<input name="{{$name}}" maxlength="{{.Col.Size}}" value="{{.Value}}" {{if .Col.Required}}required{{end}}>{{end}}
+    </label>
+    {{end}}
+    {{with .Hint}}<p class="hint field-hint">{{.}}</p>{{end}}
+    {{with .Error}}<p class="field-error">{{.}}</p>{{end}}
+  {{end}}
+{{end}}
+
 {{define "svg"}}<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{end}}
 {{define "ic-home"}}{{template "svg"}}<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>{{end}}
 {{define "ic-table"}}{{template "svg"}}<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>{{end}}

@@ -71,6 +71,7 @@
     theme: theme,
     context: function () { return call("context"); },
     tables: function () { return call("tables"); },
+    settings: function () { return call("settings"); },
     list: function (table, o) { return call("list", opts(table, o)); },
     get: function (table, id) { return call("get", { table: table, id: id }); },
     create: function (table, values) { return call("create", { table: table, values: values }); },

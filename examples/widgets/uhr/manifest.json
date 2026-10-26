@@ -1,8 +1,14 @@
 {
   "id": "uhr",
   "name": "Uhr",
-  "version": "1.0.0",
-  "description": "Beispiel für eine kleine Kachel: Uhrzeit und Datum, folgt dem Design der Oberfläche.",
+  "version": "1.1.0",
+  "description": "Beispiel für eine kleine Kachel mit Einstellungen: Uhrzeit und Datum, folgt dem Design der Oberfläche.",
   "size": "small",
-  "entry": "index.html"
+  "entry": "index.html",
+  "settings": [
+    { "key": "titel", "name": "Titel", "type": "text", "size": 40, "default": "", "description": "Erscheint über der Uhrzeit, z. B. ein Standort." },
+    { "key": "zeitzone", "name": "Zeitzone", "type": "text", "size": 64, "required": true, "default": "Europe/Berlin", "description": "z. B. Europe/Berlin, America/New_York, Asia/Tokyo" },
+    { "key": "sekunden", "name": "Sekunden anzeigen", "type": "bool", "default": false },
+    { "key": "kw", "name": "Kalenderwoche anzeigen", "type": "bool", "default": true }
+  ]
 }
