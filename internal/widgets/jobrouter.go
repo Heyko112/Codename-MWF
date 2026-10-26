@@ -26,7 +26,49 @@ var (
 	jrDBRe      = regexp.MustCompile(`getJobDB|getDBConnection|->query\(|->exec\(|\bSELECT\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b`)
 	jrUserRe    = regexp.MustCompile(`getCurrentUsername|getCurrentJobFunctions|isCurrentUserInJobFunction`)
 	jrSlugClean = regexp.MustCompile(`[^a-z0-9-]+`)
+	jrScriptRe  = regexp.MustCompile(`(?is)<script\b([^>]*)>(.*?)</script>`)
+	jrTypeRe    = regexp.MustCompile(`(?i)\btype\s*=\s*["']?([^"'\s>]+)`)
+	jrHandlerRe = regexp.MustCompile(`(?i)<[^>]+\son[a-z]+\s*=`)
 )
+
+// jrExtractScripts lagert Skripte aus HTML in eigene Dateien aus, denn die Sicherheitsregeln
+// für Widgets (CSP script-src 'self') blockieren Skripte direkt im HTML.
+func jrExtractScripts(files map[string][]byte) (moved int, handlers []string) {
+	var pages []string
+	for p := range files {
+		if strings.EqualFold(path.Ext(p), ".html") {
+			pages = append(pages, p)
+		}
+	}
+	sort.Strings(pages)
+	for _, p := range pages {
+		base := strings.TrimSuffix(p, path.Ext(p))
+		n := 0
+		files[p] = jrScriptRe.ReplaceAllFunc(files[p], func(m []byte) []byte {
+			sm := jrScriptRe.FindSubmatch(m)
+			attrs, body := string(sm[1]), sm[2]
+			if strings.Contains(strings.ToLower(attrs), "src=") || len(strings.TrimSpace(string(body))) == 0 {
+				return m
+			}
+			if t := jrTypeRe.FindStringSubmatch(attrs); t != nil {
+				switch strings.ToLower(t[1]) {
+				case "text/javascript", "application/javascript", "module":
+				default:
+					return m // z. B. JSON-Daten oder Vorlagen
+				}
+			}
+			n++
+			name := base + "-inline-" + strconv.Itoa(n) + ".js"
+			files[name] = append([]byte(nil), body...)
+			moved++
+			return []byte("<script" + attrs + ` src="` + path.Base(name) + `"></script>`)
+		})
+		if jrHandlerRe.Match(files[p]) {
+			handlers = append(handlers, p)
+		}
+	}
+	return moved, handlers
+}
 
 // jrSlug macht aus dem Klassennamen eine Widget-ID, z. B. „UmsatzHeute“ → „umsatz-heute“.
 func jrSlug(class string) string {
@@ -170,6 +212,9 @@ func fromJobRouter(files map[string][]byte) (map[string][]byte, bool) {
 			"</head>\n<body>\n" + hbs + "\n</body>\n</html>\n")
 	}
 
+	if _, handlers := jrExtractScripts(out); len(handlers) > 0 {
+		hints = append(hints, "Ereignis-Attribute wie onclick=\"…\" im HTML sind in MWF gesperrt ("+strings.Join(handlers, ", ")+"). Auf addEventListener in einer .js-Datei umstellen.")
+	}
 	if jrDBRe.MatchString(php) {
 		hints = append(hints, "getData() liest Daten aus JobRouter (getJobDB/SQL). In MWF über eine Tabelle im Manifest („tables“ mit Bauplan) und mwf.list() lösen.")
 	}

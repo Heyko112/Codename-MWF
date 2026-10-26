@@ -120,7 +120,7 @@ func TestParseJobRouterApp(t *testing.T) {
 		"dashboard/MyWidgets/UmsatzHeute/UmsatzHeute.php": jrPHP,
 		"dashboard/MyWidgets/UmsatzHeute/template.hbs":    `<iframe src="{{appUrl}}"></iframe>`,
 		"dashboard/MyWidgets/UmsatzHeute/style.css":       "x",
-		"dashboard/MyWidgets/UmsatzHeute/app/index.html":  `<script>var fe=window.frameElement; fetch('daten.php')</script>`,
+		"dashboard/MyWidgets/UmsatzHeute/app/index.html":  `<script>var fe=window.frameElement; fetch('daten.php')</script><button onclick="x()">`,
 		"dashboard/MyWidgets/UmsatzHeute/app/app.js":      "1",
 	}))
 	if err != nil {
@@ -130,11 +130,15 @@ func TestParseJobRouterApp(t *testing.T) {
 	if m.ID != "umsatz-heute" || m.Name != "Umsatz heute" || m.Size != "wide" || m.Entry != "app/index.html" || m.Import == nil {
 		t.Fatalf("%+v", m)
 	}
-	if _, ok := p.Files["app/app.js"]; !ok || len(p.Files) != 4 { // index.html, app.js, style.css, manifest.json
+	// index.html, app.js, style.css, manifest.json und das ausgelagerte Skript
+	if _, ok := p.Files["app/app.js"]; !ok || len(p.Files) != 5 {
 		t.Fatalf("%v", len(p.Files))
 	}
+	if idx := string(p.Files["app/index.html"].Data); idx != `<script src="index-inline-1.js"></script><button onclick="x()">` {
+		t.Fatal(idx)
+	}
 	all := strings.Join(m.Import.Hints, "\n")
-	for _, want := range []string{"getJobDB", "isAuthorized", "daten.php", "frameElement", "mwf.context"} {
+	for _, want := range []string{"getJobDB", "isAuthorized", "daten.php", "frameElement", "mwf.context", "onclick"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("Hinweis zu %s fehlt:\n%s", want, all)
 		}
