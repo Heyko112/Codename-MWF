@@ -53,6 +53,30 @@ type SettingDef struct {
 
 // Column beschreibt die Einstellung als Spalte (Größe mit Vorgabe des Typs).
 func (d SettingDef) Column() *tables.Column {
+	return ColumnDef{Key: d.Key, Name: d.Name, Type: d.Type, Size: d.Size, Required: d.Required}.Column()
+}
+
+// TableRequest ist eine Tabelle, die das Widget anfordert. Das Widget kennt nur den Alias,
+// welche echte Tabelle dahinter steckt, legt der Admin bei der Installation fest.
+type TableRequest struct {
+	Alias       string      `json:"alias"`
+	Access      []string    `json:"access"`
+	Description string      `json:"description"`
+	Name        string      `json:"name"`    // Vorschlag für eine neue Tabelle
+	Columns     []ColumnDef `json:"columns"` // Bauplan: Spalten, die das Widget braucht
+}
+
+// ColumnDef ist eine Spalte aus dem Bauplan eines Widgets.
+type ColumnDef struct {
+	Key      string `json:"key"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Size     int    `json:"size"`
+	Required bool   `json:"required"`
+}
+
+// Column beschreibt die Spalte wie in einer Tabelle (Größe mit Vorgabe des Typs).
+func (d ColumnDef) Column() *tables.Column {
 	c := &tables.Column{Key: d.Key, Name: d.Name, Type: d.Type, Size: d.Size, Required: d.Required}
 	if t := tables.TypeByCode(d.Type); t != nil && c.Size == 0 {
 		c.Size = t.DefaultSize
@@ -60,12 +84,12 @@ func (d SettingDef) Column() *tables.Column {
 	return c
 }
 
-// TableRequest ist eine Tabelle, die das Widget anfordert. Das Widget kennt nur den Alias,
-// welche echte Tabelle dahinter steckt, legt der Admin bei der Installation fest.
-type TableRequest struct {
-	Alias       string   `json:"alias"`
-	Access      []string `json:"access"`
-	Description string   `json:"description"`
+// SuggestedName ist der Namensvorschlag für eine neue Tabelle.
+func (t TableRequest) SuggestedName(widgetName string) string {
+	if t.Name != "" {
+		return t.Name
+	}
+	return widgetName + ": " + t.Alias
 }
 
 // Perms wandelt die angeforderten Rechte um.
@@ -274,6 +298,20 @@ func (p *Package) check() error {
 		if utf8.RuneCountInString(t.Description) > 255 {
 			return InputError("manifest.json: „tables“: Beschreibung bei „" + t.Alias + "“ ist länger als 255 Zeichen.")
 		}
+		if t.Name != "" {
+			if _, err := tables.CheckName(t.Name); err != nil {
+				return InputError("manifest.json: „tables“: „name“ bei „" + t.Alias + "“ muss 1 bis 64 Zeichen lang sein.")
+			}
+		}
+		if len(t.Columns) > 100 {
+			return InputError("manifest.json: „tables“: höchstens 100 Spalten bei „" + t.Alias + "“.")
+		}
+		keys, names := map[string]bool{}, map[string]bool{}
+		for _, c := range t.Columns {
+			if err := checkColumnDef(c, keys, names, "manifest.json: „tables“ „"+t.Alias+"“ Spalte „"+c.Key+"“: "); err != nil {
+				return err
+			}
+		}
 	}
 	if err := checkSettings(m.Settings); err != nil {
 		return err
@@ -292,23 +330,10 @@ func checkSettings(defs []SettingDef) error {
 	keys, names := map[string]bool{}, map[string]bool{}
 	for _, d := range defs {
 		prefix := "manifest.json: „settings“ „" + d.Key + "“: "
-		if err := tables.CheckKey(d.Key); err != nil || keys[d.Key] {
-			return InputError("manifest.json: „settings“: Jeder „key“ muss eindeutig sein, mit einem Kleinbuchstaben beginnen und nur a–z, 0–9 und _ enthalten.")
-		}
-		keys[d.Key] = true
-		name, err := tables.CheckName(d.Name)
-		if err != nil || names[name] {
-			return InputError(prefix + "„name“ muss eindeutig und 1 bis 64 Zeichen lang sein.")
-		}
-		names[name] = true
-		t := tables.TypeByCode(d.Type)
-		if t == nil {
-			return InputError(prefix + "unbekannter „type“. Erlaubt sind text, longtext, int, decimal, date, datetime, bool.")
+		if err := checkColumnDef(ColumnDef{Key: d.Key, Name: d.Name, Type: d.Type, Size: d.Size}, keys, names, prefix); err != nil {
+			return err
 		}
 		c := d.Column()
-		if _, err := tables.CheckSize(t, c.Size); err != nil {
-			return InputError(prefix + err.Error())
-		}
 		if len(d.Default) > 0 {
 			if _, err := tables.FromJSON(c, d.Default); err != nil {
 				return InputError(prefix + "„default“ passt nicht zum Typ: " + err.Error())
@@ -317,6 +342,27 @@ func checkSettings(defs []SettingDef) error {
 		if utf8.RuneCountInString(d.Description) > 255 {
 			return InputError(prefix + "„description“ ist länger als 255 Zeichen.")
 		}
+	}
+	return nil
+}
+
+// checkColumnDef prüft eine Spalte aus dem Manifest. keys und names sammeln, was schon vorkam.
+func checkColumnDef(d ColumnDef, keys, names map[string]bool, prefix string) error {
+	if err := tables.CheckKey(d.Key); err != nil || keys[d.Key] {
+		return InputError(prefix + "Jeder „key“ muss eindeutig sein, mit einem Kleinbuchstaben beginnen und nur a–z, 0–9 und _ enthalten.")
+	}
+	keys[d.Key] = true
+	name, err := tables.CheckName(d.Name)
+	if err != nil || names[name] {
+		return InputError(prefix + "„name“ muss eindeutig und 1 bis 64 Zeichen lang sein.")
+	}
+	names[name] = true
+	t := tables.TypeByCode(d.Type)
+	if t == nil {
+		return InputError(prefix + "unbekannter „type“. Erlaubt sind text, longtext, int, decimal, date, datetime, bool.")
+	}
+	if _, err := tables.CheckSize(t, d.Column().Size); err != nil {
+		return InputError(prefix + err.Error())
 	}
 	return nil
 }

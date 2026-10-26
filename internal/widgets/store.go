@@ -180,6 +180,8 @@ type Grant struct {
 	Requested   tables.Perms
 	TableID     sql.NullInt64
 	Granted     tables.Perms
+	Suggested   string      // Namensvorschlag für eine neue Tabelle
+	Columns     []ColumnDef // Bauplan aus dem Manifest
 }
 
 // syncGrants gleicht die Freigaben mit dem Manifest ab. Bei einem Update bleibt eine Zuordnung erhalten,
@@ -228,6 +230,7 @@ func (s *Store) Grants(ctx context.Context, w *Widget) ([]Grant, error) {
 	for _, t := range ParseManifest(w.Manifest).Tables {
 		g := stored[t.Alias]
 		g.Alias, g.Description, g.Requested = t.Alias, t.Description, t.Perms()
+		g.Suggested, g.Columns = t.SuggestedName(w.Name), t.Columns
 		out = append(out, g)
 	}
 	return out, nil

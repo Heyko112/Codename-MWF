@@ -282,6 +282,9 @@ func (s *Server) adminUploadWidget(w http.ResponseWriter, r *http.Request) {
 		msg = "Widget „" + m.Name + "“ von " + old + " auf " + m.Version + " aktualisiert. Sichtbarkeit bleibt wie bisher."
 		event = "widget_updated"
 	}
+	if hint := s.setupHint(ctx, wd); hint != "" {
+		msg += " " + hint
+	}
 	s.auditDetail(r, 0, event, m.ID+" "+m.Version+" durch "+CurrentUser(ctx).Username)
 	s.flashRedirect(w, r, msg, adminWidgetURL(id))
 }
@@ -331,20 +334,26 @@ func (s *Server) adminWidgetDetail(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	setups, err := s.tableSetups(ctx, grants, tbls)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	fields, err := s.widgetSettingsFields(r, wd)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	s.render(w, r, http.StatusOK, "admin_widget", map[string]any{
-		"Settings": fields,
-		"User":     CurrentUser(ctx),
-		"Widget":   wd,
-		"Roles":    roles,
-		"Selected": selected,
-		"Grants":   grants,
-		"Tables":   tbls,
-		"Flash":    s.sessions.PopString(ctx, sessFlash),
+		"Settings":   fields,
+		"User":       CurrentUser(ctx),
+		"Widget":     wd,
+		"Roles":      roles,
+		"Selected":   selected,
+		"Setups":     setups,
+		"Tables":     tbls,
+		"Flash":      s.sessions.PopString(ctx, sessFlash),
+		"FlashError": s.sessions.PopString(ctx, sessFlashErr),
 	})
 }
 
@@ -379,7 +388,7 @@ func (s *Server) adminSetWidgetTable(w http.ResponseWriter, r *http.Request) {
 			err = tables.ErrNotFound
 		}
 		if err != nil {
-			s.flashRedirect(w, r, "Diese Tabelle gibt es nicht mehr.", adminWidgetURL(wd.ID))
+			s.errorRedirect(w, r, "Diese Tabelle gibt es nicht mehr.", adminWidgetURL(wd.ID))
 			return
 		}
 		tableName = t.Name
@@ -436,7 +445,7 @@ func (s *Server) adminDeleteWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostFormValue("confirm") != "on" {
-		s.flashRedirect(w, r, "Zum Entfernen bitte das Häkchen „wirklich entfernen“ setzen.", adminWidgetURL(wd.ID))
+		s.errorRedirect(w, r, "Zum Entfernen bitte das Häkchen „wirklich entfernen“ setzen.", adminWidgetURL(wd.ID))
 		return
 	}
 	if err := s.widgets.DeleteSettings(r.Context(), s.tables, wd.ID); err != nil {
@@ -511,7 +520,7 @@ func (s *Server) adminSaveWidgetSettings(w http.ResponseWriter, r *http.Request)
 				msgs = append(msgs, f.Col.Name+": "+f.Error)
 			}
 		}
-		s.flashRedirect(w, r, "Einstellungen nicht gespeichert. "+strings.Join(msgs, "; "), adminWidgetURL(wd.ID))
+		s.errorRedirect(w, r, "Einstellungen nicht gespeichert. "+strings.Join(msgs, "; "), adminWidgetURL(wd.ID))
 		return
 	}
 	if err := s.tables.UpdateRecord(ctx, t, rec.ID, values, CurrentUser(ctx).ID); err != nil {

@@ -73,8 +73,17 @@ Ein Beispiel liegt in `examples/widgets/hallo`. Den Ordner `hallo` als ZIP packe
 Ein Widget fordert im Manifest Tabellen über einen Alias an. Unter `/admin/widgets/<id>` ordnet ein Verwalter jedem Alias eine echte Tabelle zu und gibt höchstens die angeforderten Rechte frei. Wirksam ist immer **Recht des Benutzers ∩ Freigabe des Widgets**: Über ein Widget kann niemand mehr als in der Tabelle selbst.
 
 ```json
-"tables": [ { "alias": "notizen", "access": ["read", "create", "update", "delete"], "description": "Wofür das Widget die Tabelle braucht" } ]
+"tables": [ {
+  "alias": "notizen", "access": ["read", "create", "update", "delete"], "description": "Wofür das Widget die Tabelle braucht",
+  "name": "Notizen",
+  "columns": [
+    { "key": "text", "name": "Text", "type": "text", "size": 200, "required": true },
+    { "key": "erledigt", "name": "Erledigt", "type": "bool" }
+  ]
+} ]
 ```
+
+`name` und `columns` sind der **Bauplan** (optional, Typen wie bei den Einstellungen unten). Mit Bauplan bietet die Widget-Seite je Alias „Neue Tabelle anlegen“: Name und Spaltennamen sind vorausgefüllt und änderbar, ein Klick legt die Tabelle mit allen Spalten an, ordnet sie zu, gibt die angeforderten Rechte frei und setzt auf Wunsch dieselben Rechte für gewählte Rollen. Alternativ „Vorhandene Tabelle nehmen“ (eine Tabelle mit dem vorgeschlagenen Namen ist vorausgewählt). Fehlen in der zugeordneten Tabelle Spalten, etwa nach einem Update mit neuen Spalten, zeigt die Seite sie mit „Fehlende Spalten ergänzen“. Ergänzt wird nur auf Klick, gelöscht wird nie etwas.
 
 Spalten spricht das Widget über ihren festen **Schlüssel** an (unter Tabellen verwalten sichtbar, bei Anlage optional selbst wählbar, danach unveränderlich). So darf eine Spalte umbenannt werden, ohne dass ein Widget bricht.
 
@@ -94,7 +103,7 @@ await mwf.remove("notizen", rec.id);
 
 Werte: Text als String, Ganzzahl als Zahl, Dezimal als String (`"12.50"`), Datum `"YYYY-MM-DD"`, Datum/Uhrzeit `"YYYY-MM-DDTHH:MM:SS"`, Ja/Nein als `true`/`false`, leer als `null`. Fehler kommen als `mwf.MwfError` mit `code` (z. B. `forbidden`, `invalid`, `not_mapped`) und bei `invalid` mit `fields` je Spalte. Löschen über ein Widget steht im Audit-Log.
 
-Beispiel: `examples/widgets/notizen` (braucht eine Tabelle mit den Spalten `text` und `erledigt`).
+Beispiel: `examples/widgets/notizen` (mit Bauplan für die Tabelle).
 
 **Grenze:** Die Abschottung schützt MWF vor dem Widget. Ein Widget sieht aber die Daten, die es lesen darf, und könnte seinen eigenen Rahmen auf eine fremde Seite umleiten. Nur Widgets aus vertrauenswürdiger Quelle installieren.
 

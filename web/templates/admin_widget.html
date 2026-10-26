@@ -3,6 +3,7 @@
 <p><a href="/admin/widgets">← Widgets verwalten</a></p>
 <h1>{{.Widget.Name}} {{if .Widget.Active}}<span class="badge badge-on">aktiv</span>{{else}}<span class="badge badge-warn">inaktiv</span>{{end}}</h1>
 {{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with .FlashError}}<p class="error" role="alert">{{.}}</p>{{end}}
 <p><a class="button" href="/widgets/{{.Widget.ID}}">Öffnen</a></p>
 
 <div class="grid">
@@ -32,37 +33,75 @@
 </div>
 </div>
 
-{{if .Grants}}
+{{if .Setups}}
 <div class="card">
   <h2>Daten</h2>
-  <p class="hint">Das Widget fordert diese Tabellen an. Ordne jeweils eine Tabelle zu und gib höchstens die angeforderten Rechte frei.
+  <p class="hint">Das Widget braucht diese Tabellen. Lege sie mit einem Klick nach dem Vorschlag des Widgets an oder nimm eine vorhandene Tabelle.
   Wirksam ist immer beides zusammen: Ein Benutzer kann über das Widget nur, was er auch selbst in der Tabelle darf.</p>
-  <table>
-    <thead><tr><th>Alias</th><th>Wofür</th><th>Tabelle und Freigabe</th></tr></thead>
-    <tbody>
-    {{range $g := .Grants}}
-    <tr>
-      <td><code>{{$g.Alias}}</code></td>
-      <td>{{with $g.Description}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
-      <td>
-        <form class="row" method="post" action="/admin/widgets/{{$.Widget.ID}}/tabellen">
-          <input type="hidden" name="alias" value="{{$g.Alias}}">
-          <select name="table" aria-label="Tabelle für {{$g.Alias}}">
-            <option value="0">– keine –</option>
-            {{range $.Tables}}<option value="{{.ID}}" {{if and $g.TableID.Valid (eq $g.TableID.Int64 .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
-          </select>
-          {{if $g.Requested.Read}}<label class="check"><input type="checkbox" name="read" {{if $g.Granted.Read}}checked{{end}}> Lesen</label>{{end}}
-          {{if $g.Requested.Create}}<label class="check"><input type="checkbox" name="create" {{if $g.Granted.Create}}checked{{end}}> Anlegen</label>{{end}}
-          {{if $g.Requested.Update}}<label class="check"><input type="checkbox" name="update" {{if $g.Granted.Update}}checked{{end}}> Ändern</label>{{end}}
-          {{if $g.Requested.Delete}}<label class="check"><input type="checkbox" name="delete" {{if $g.Granted.Delete}}checked{{end}}> Löschen</label>{{end}}
-          <button type="submit">Speichern</button>
-        </form>
-      </td>
-    </tr>
+  {{range $g := .Setups}}
+  <section class="setup">
+    <h3><code>{{$g.Alias}}</code>
+      {{if not $g.Table}}<span class="badge badge-warn">nicht eingerichtet</span>
+      {{else if or $g.Missing $g.Mismatch}}<span class="badge badge-warn">Spalten prüfen</span>
+      {{else}}<span class="badge badge-on">eingerichtet</span>{{end}}</h3>
+    <p class="muted">{{with $g.Description}}{{.}} · {{end}}Braucht: {{$g.Rights}}</p>
+
+    {{with $g.Table}}
+    <p>Tabelle: <a href="/admin/tabellen/{{.ID}}">{{.Name}}</a> · Freigabe fürs Widget: {{with $g.GrantedWords}}{{.}}{{else}}<span class="muted">keine</span>{{end}}</p>
     {{end}}
-    </tbody>
-  </table>
-  <p class="hint">Das Widget spricht Spalten über ihren Schlüssel an (siehe Tabellen verwalten). Fehlt eine Spalte, meldet das Widget den Fehler selbst.</p>
+    {{if $g.Missing}}
+    <form class="row" method="post" action="/admin/widgets/{{$.Widget.ID}}/tabellen/{{$g.Alias}}/spalten">
+      <span>Es fehlen: {{range $i, $c := $g.Missing}}{{if $i}}, {{end}}{{$c.Name}} <span class="muted">({{$c.Column.TypeLabel}})</span>{{end}}</span>
+      <button type="submit">Fehlende Spalten ergänzen</button>
+    </form>
+    {{end}}
+    {{range $g.Mismatch}}<p class="error">{{.}}</p>{{end}}
+
+    {{if and (not $g.Table) $g.Columns}}
+    <details class="setup-new" open>
+      <summary>Neue Tabelle anlegen</summary>
+      <form method="post" action="/admin/widgets/{{$.Widget.ID}}/tabellen/{{$g.Alias}}/anlegen">
+        <label>Name der Tabelle <input name="name" value="{{$g.Suggested}}" maxlength="64" required></label>
+        <table>
+          <thead><tr><th>Spalte</th><th>Schlüssel</th><th>Typ</th></tr></thead>
+          <tbody>
+          {{range $g.Columns}}{{$c := .Column}}
+          <tr>
+            <td><input name="col_{{.Key}}" value="{{.Name}}" maxlength="64" required aria-label="Name der Spalte {{.Key}}"></td>
+            <td><code>{{.Key}}</code></td>
+            <td>{{$c.TypeLabel}}{{if .Required}} <span class="req" title="Pflichtfeld">*</span>{{end}}</td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+        <fieldset class="roles-pick">
+          <legend>Diese Rollen dürfen in der Tabelle {{$g.Rights}} <span class="muted">(optional)</span></legend>
+          {{range $.Roles}}{{if not .System}}
+          <label class="check"><input type="checkbox" name="role" value="{{.ID}}" {{if index $.Selected .ID}}checked{{end}}> {{.Name}}</label>
+          {{end}}{{end}}
+        </fieldset>
+        <button type="submit">Tabelle anlegen</button>
+      </form>
+    </details>
+    {{end}}
+
+    <details class="setup-pick"{{if and (not $g.Table) (not $g.Columns)}} open{{end}}>
+      <summary>{{if $g.Table}}Zuordnung oder Freigabe ändern{{else}}Vorhandene Tabelle nehmen{{end}}</summary>
+      <form class="row" method="post" action="/admin/widgets/{{$.Widget.ID}}/tabellen">
+        <input type="hidden" name="alias" value="{{$g.Alias}}">
+        <select name="table" aria-label="Tabelle für {{$g.Alias}}">
+          <option value="0">– keine –</option>
+          {{range $.Tables}}<option value="{{.ID}}" {{if $g.TableID.Valid}}{{if eq $g.TableID.Int64 .ID}}selected{{end}}{{else if eq $g.Match .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+        </select>
+        {{if $g.Requested.Read}}<label class="check"><input type="checkbox" name="read" {{if or $g.Granted.Read (not $g.Table)}}checked{{end}}> Lesen</label>{{end}}
+        {{if $g.Requested.Create}}<label class="check"><input type="checkbox" name="create" {{if or $g.Granted.Create (not $g.Table)}}checked{{end}}> Anlegen</label>{{end}}
+        {{if $g.Requested.Update}}<label class="check"><input type="checkbox" name="update" {{if or $g.Granted.Update (not $g.Table)}}checked{{end}}> Ändern</label>{{end}}
+        {{if $g.Requested.Delete}}<label class="check"><input type="checkbox" name="delete" {{if or $g.Granted.Delete (not $g.Table)}}checked{{end}}> Löschen</label>{{end}}
+        <button type="submit">Speichern</button>
+      </form>
+    </details>
+  </section>
+  {{end}}
 </div>
 {{end}}
 

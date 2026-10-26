@@ -70,3 +70,31 @@ func TestParseSizeLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParseBlueprint(t *testing.T) {
+	ok := `{"id":"a","name":"A","version":"1.0.0","tables":[{"alias":"n","access":["read"],"name":"Notizen",
+		"columns":[{"key":"text","name":"Text","type":"text","required":true},{"key":"erledigt","name":"Erledigt","type":"bool"}]}]}`
+	p, err := Parse(zipOf(t, map[string]string{"manifest.json": ok, "index.html": "x"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := p.Manifest.Tables[0]
+	if tr.SuggestedName("A") != "Notizen" || len(tr.Columns) != 2 || tr.Columns[0].Column().Size != 255 {
+		t.Fatalf("%+v", tr)
+	}
+	if (TableRequest{Alias: "n"}).SuggestedName("A") != "A: n" {
+		t.Fatal("Vorschlag ohne name")
+	}
+	bad := map[string]string{
+		"Schlüssel": `[{"key":"Text","name":"Text","type":"text"}]`,
+		"Typ":       `[{"key":"text","name":"Text","type":"xyz"}]`,
+		"doppelt":   `[{"key":"a","name":"A","type":"bool"},{"key":"a","name":"B","type":"bool"}]`,
+	}
+	for want, cols := range bad {
+		m := `{"id":"a","name":"A","version":"1.0.0","tables":[{"alias":"n","access":["read"],"columns":` + cols + `}]}`
+		_, err := Parse(zipOf(t, map[string]string{"manifest.json": m, "index.html": "x"}))
+		if err == nil || !strings.Contains(err.Error(), "Spalte") {
+			t.Errorf("%s: %v", want, err)
+		}
+	}
+}
