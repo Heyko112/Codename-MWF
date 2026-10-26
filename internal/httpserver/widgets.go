@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -263,6 +264,14 @@ func (s *Server) adminUploadWidget(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	wd, err := s.widgets.ByID(ctx, id)
+	if err == nil {
+		_, err = s.widgets.SyncSettings(ctx, s.tables, wd, CurrentUser(ctx).ID)
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	m := pkg.Manifest
 	msg := "Widget „" + m.Name + "“ " + m.Version + " installiert. Lege jetzt fest, welche Rollen es sehen."
 	event := "widget_installed"
@@ -322,7 +331,13 @@ func (s *Server) adminWidgetDetail(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	fields, err := s.widgetSettingsFields(r, wd)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	s.render(w, r, http.StatusOK, "admin_widget", map[string]any{
+		"Settings": fields,
 		"User":     CurrentUser(ctx),
 		"Widget":   wd,
 		"Roles":    roles,
@@ -360,6 +375,9 @@ func (s *Server) adminSetWidgetTable(w http.ResponseWriter, r *http.Request) {
 	tableName := "keine"
 	if tableID > 0 {
 		t, err := s.tables.ByID(ctx, tableID)
+		if err == nil && t.WidgetID.Valid {
+			err = tables.ErrNotFound
+		}
 		if err != nil {
 			s.flashRedirect(w, r, "Diese Tabelle gibt es nicht mehr.", adminWidgetURL(wd.ID))
 			return
@@ -421,10 +439,85 @@ func (s *Server) adminDeleteWidget(w http.ResponseWriter, r *http.Request) {
 		s.flashRedirect(w, r, "Zum Entfernen bitte das Häkchen „wirklich entfernen“ setzen.", adminWidgetURL(wd.ID))
 		return
 	}
+	if err := s.widgets.DeleteSettings(r.Context(), s.tables, wd.ID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	if err := s.widgets.Delete(r.Context(), wd.ID); err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	s.auditDetail(r, 0, "widget_deleted", wd.Slug+" "+wd.Version+" durch "+CurrentUser(r.Context()).Username)
 	s.flashRedirect(w, r, "Widget „"+wd.Name+"“ entfernt.", "/admin/widgets")
+}
+
+// widgetSettingsFields liefert die Eingabefelder der Einstellungen, mit der Beschreibung aus dem Manifest.
+func (s *Server) widgetSettingsFields(r *http.Request, wd *widgets.Widget) ([]field, error) {
+	ctx := r.Context()
+	t, err := s.widgets.SyncSettings(ctx, s.tables, wd, CurrentUser(ctx).ID)
+	if err != nil {
+		return nil, err
+	}
+	rec, err := s.widgets.SettingsRecord(ctx, s.tables, t)
+	if err != nil {
+		return nil, err
+	}
+	return settingsFields(t, rec, wd), nil
+}
+
+// settingsFields zeigt nur Einstellungen, die das aktuelle Manifest nennt, in dessen Reihenfolge.
+func settingsFields(t *tables.Table, rec *tables.Record, wd *widgets.Widget) []field {
+	byKey := map[string]field{}
+	for _, f := range recordFields(t, rec) {
+		byKey[f.Col.Key] = f
+	}
+	var out []field
+	for _, d := range widgets.ParseManifest(wd.Manifest).Settings {
+		if f, ok := byKey[d.Key]; ok {
+			f.Hint = d.Description
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func (s *Server) adminSaveWidgetSettings(w http.ResponseWriter, r *http.Request) {
+	wd, ok := s.loadAdminWidget(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	t, err := s.widgets.SyncSettings(ctx, s.tables, wd, CurrentUser(ctx).ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	rec, err := s.widgets.SettingsRecord(ctx, s.tables, t)
+	if err != nil || rec == nil {
+		s.serverError(w, r, fmt.Errorf("Einstellungen von %s: %v", wd.Slug, err))
+		return
+	}
+	// Nur Spalten aus dem aktuellen Manifest, alte Werte bleiben unberührt
+	shown := settingsFields(t, rec, wd)
+	sub := &tables.Table{ID: t.ID, Name: t.Name}
+	for _, f := range shown {
+		sub.Columns = append(sub.Columns, f.Col)
+	}
+	values, fields, valid := parseRecord(r, sub)
+	if !valid {
+		var msgs []string
+		for _, f := range fields {
+			if f.Error != "" {
+				msgs = append(msgs, f.Col.Name+": "+f.Error)
+			}
+		}
+		s.flashRedirect(w, r, "Einstellungen nicht gespeichert. "+strings.Join(msgs, "; "), adminWidgetURL(wd.ID))
+		return
+	}
+	if err := s.tables.UpdateRecord(ctx, t, rec.ID, values, CurrentUser(ctx).ID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.auditDetail(r, 0, "widget_settings_changed", wd.Slug+" durch "+CurrentUser(ctx).Username)
+	s.flashRedirect(w, r, "Einstellungen von „"+wd.Name+"“ gespeichert.", adminWidgetURL(wd.ID))
 }

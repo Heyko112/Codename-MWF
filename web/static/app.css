@@ -282,3 +282,4 @@ code { font-size: .9em; }
 }
 .sec-settings { margin-top: 12px; }
 input.name-input { max-width: 320px; margin: 0; }
+.field-hint { margin: -10px 0 16px; }

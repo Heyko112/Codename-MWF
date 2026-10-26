@@ -98,6 +98,19 @@ Beispiel: `examples/widgets/notizen` (braucht eine Tabelle mit den Spalten `text
 
 **Grenze:** Die Abschottung schützt MWF vor dem Widget. Ein Widget sieht aber die Daten, die es lesen darf, und könnte seinen eigenen Rahmen auf eine fremde Seite umleiten. Nur Widgets aus vertrauenswürdiger Quelle installieren.
 
+### Einstellungen je Widget
+
+Jedes Widget bekommt automatisch eine eigene Einstellungs-Tabelle (eine echte Tabelle mit genau einem Datensatz). Sie gehört dem Widget, taucht nicht unter Tabellen/Daten auf und wird mit dem Widget gelöscht. Welche Einstellungen es gibt, steht im Manifest:
+
+```json
+"settings": [
+  { "key": "zeitzone", "name": "Zeitzone", "type": "text", "size": 64, "required": true, "default": "Europe/Berlin", "description": "z. B. Europe/Berlin" },
+  { "key": "sekunden", "name": "Sekunden anzeigen", "type": "bool", "default": false }
+]
+```
+
+Typen wie bei Tabellen: `text`, `longtext`, `int`, `decimal`, `date`, `datetime`, `bool`. Die Werte setzt ein Verwalter unter Widgets verwalten → Widget → Einstellungen, das Widget liest sie mit `await mwf.settings()` (Objekt nach `key`). Bei einem Update kommen neue Einstellungen mit ihrer Vorgabe dazu, vorhandene Werte bleiben erhalten. Beispiel: `examples/widgets/uhr`.
+
 ## Startseite und Design
 
 Die Startseite besteht aus **Bereichen** (Reitern), zum Beispiel Übersicht, Vertrieb, Team. Mit dem Recht „Widgets verwalten“ legst du sie unter **Startseite** (`/admin/startseite`) an:

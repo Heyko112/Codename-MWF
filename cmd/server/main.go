@@ -22,6 +22,7 @@ import (
 	"github.com/Heyko112/codename-mwf/internal/db"
 	"github.com/Heyko112/codename-mwf/internal/httpserver"
 	"github.com/Heyko112/codename-mwf/internal/tables"
+	"github.com/Heyko112/codename-mwf/internal/widgets"
 	"github.com/Heyko112/codename-mwf/web"
 )
 
@@ -62,8 +63,20 @@ func run() error {
 	if err := db.Migrate(ctx, database); err != nil {
 		return err
 	}
-	if err := tables.NewStore(database).BackfillKeys(ctx); err != nil {
+	ts := tables.NewStore(database)
+	if err := ts.BackfillKeys(ctx); err != nil {
 		return fmt.Errorf("Spaltenschlüssel nachtragen: %w", err)
+	}
+	// Widgets, die vor den Einstellungs-Tabellen installiert wurden, bekommen ihre Tabelle jetzt
+	ws := widgets.NewStore(database)
+	all, err := ws.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, wd := range all {
+		if _, err := ws.SyncSettings(ctx, ts, wd, 0); err != nil {
+			return fmt.Errorf("Einstellungen von Widget %s: %w", wd.Slug, err)
+		}
 	}
 
 	sessions := scs.New()

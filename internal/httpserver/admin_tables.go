@@ -64,7 +64,8 @@ func (s *Server) loadTable(w http.ResponseWriter, r *http.Request) (*tables.Tabl
 		return nil, false
 	}
 	t, err := s.tables.ByID(r.Context(), id)
-	if errors.Is(err, tables.ErrNotFound) {
+	// Einstellungs-Tabellen gehören ihrem Widget und werden dort bearbeitet
+	if errors.Is(err, tables.ErrNotFound) || (err == nil && t.WidgetID.Valid) {
 		s.notFound(w, r)
 		return nil, false
 	}

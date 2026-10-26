@@ -108,6 +108,29 @@ func (s *Server) widgetCall(w http.ResponseWriter, r *http.Request) (any, error)
 			out = append(out, describeAPITable(t))
 		}
 		return out, nil
+	case "settings":
+		// Die Tabelle legt Installation bzw. Serverstart an, hier wird nur gelesen
+		out := map[string]any{}
+		tid, err := s.widgets.SettingsTableID(ctx, wd.ID)
+		if err != nil || tid == 0 {
+			return out, err
+		}
+		t, err := s.tables.ByID(ctx, tid)
+		if err != nil {
+			return nil, err
+		}
+		rec, err := s.widgets.SettingsRecord(ctx, s.tables, t)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range settingsFields(t, rec, wd) {
+			var v any
+			if rec != nil {
+				v = rec.Values[f.Col.ID]
+			}
+			out[f.Col.Key] = tables.ToJSON(f.Col, v)
+		}
+		return out, nil
 	case "list", "get", "create", "update", "delete":
 		return s.apiRecords(r, wd, call)
 	}
