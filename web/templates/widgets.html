@@ -8,10 +8,11 @@
 <div class="widget-cards">
   {{range .Widgets}}
   <a class="widget-card" href="/widgets/{{.ID}}">
-    <strong>{{.Name}}</strong>{{if not .Active}} <span class="badge badge-warn">inaktiv</span>{{end}}
+    <strong>{{.Name}}{{if index $.Fav .ID}} <span class="star on">{{template "ic-star"}}</span>{{end}}</strong>{{if not .Active}} <span class="badge badge-warn">inaktiv</span>{{end}}
     <span class="muted">{{with .Description}}{{.}}{{else}}Version {{.Version}}{{end}}</span>
   </a>
   {{end}}
 </div>
+<p class="hint">Mit dem Stern in einem geöffneten Widget legst du es in die Seitenleiste.</p>
 {{else}}<p class="muted">Für dich sind noch keine Widgets freigegeben.</p>{{end}}
 {{end}}

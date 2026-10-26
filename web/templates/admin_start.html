@@ -1,0 +1,67 @@
+{{define "title"}}Startseite verwalten · MWF{{end}}
+{{define "content"}}
+<h1>Startseite</h1>
+<p class="hint">Die Startseite besteht aus Bereichen (Reitern). Jeder Bereich enthält Widgets als Kacheln, ihre Größe kommt aus dem Widget.
+Ein Bereich ohne Rolle ist für alle sichtbar, sonst für die gewählten Rollen (auch über enthaltene Rollen). Kacheln sieht nur, wer das Widget selbst sehen darf.
+Jeder Benutzer kann Kacheln für sich ausblenden.</p>
+{{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with .Error}}<p class="error" role="alert">{{.}}</p>{{end}}
+
+{{range $i, $s := .Sections}}
+<div class="card sec-card">
+  <header>
+    <h2>{{$s.Name}}</h2>
+    <span class="muted">{{if $s.RoleNames}}für {{range $j, $n := $s.RoleNames}}{{if $j}}, {{end}}{{$n}}{{end}}{{else}}für alle{{end}}</span>
+    <form method="post" action="/admin/startseite/{{$s.ID}}/hoch"><button type="submit" class="ghost small" title="nach vorn" aria-label="{{$s.Name}} nach vorn">{{template "ic-up"}}</button></form>
+    <form method="post" action="/admin/startseite/{{$s.ID}}/runter"><button type="submit" class="ghost small" title="nach hinten" aria-label="{{$s.Name}} nach hinten">{{template "ic-down"}}</button></form>
+  </header>
+
+  <ul class="tile-list">
+    {{range $s.Items}}
+    <li>
+      <span><strong>{{.Widget.Name}}</strong> <span class="muted">{{.Widget.SizeLabel}}</span>{{if not .Widget.Active}} <span class="badge badge-warn">inaktiv</span>{{end}}</span>
+      <form method="post" action="/admin/startseite/kacheln/{{.ID}}/hoch"><button type="submit" class="ghost small" aria-label="{{.Widget.Name}} nach oben">{{template "ic-up"}}</button></form>
+      <form method="post" action="/admin/startseite/kacheln/{{.ID}}/runter"><button type="submit" class="ghost small" aria-label="{{.Widget.Name}} nach unten">{{template "ic-down"}}</button></form>
+      <form method="post" action="/admin/startseite/kacheln/{{.ID}}/entfernen"><button type="submit" class="ghost small">Entfernen</button></form>
+    </li>
+    {{else}}<li class="muted">Noch keine Kacheln.</li>{{end}}
+  </ul>
+  {{if $.Widgets}}
+  <form class="row" method="post" action="/admin/startseite/{{$s.ID}}/kacheln">
+    <select name="widget" aria-label="Widget für {{$s.Name}}">{{range $.Widgets}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+    <button type="submit" class="small">Kachel hinzufügen</button>
+  </form>
+  {{else}}<p class="hint">Noch keine Widgets installiert.</p>{{end}}
+
+  <details>
+    <summary>Name, Sichtbarkeit, Löschen</summary>
+    <div class="grid sec-settings">
+      <form method="post" action="/admin/startseite/{{$s.ID}}">
+        <label>Name <input name="name" value="{{$s.Name}}" maxlength="64" required></label>
+        <button type="submit" class="small">Umbenennen</button>
+      </form>
+      <form method="post" action="/admin/startseite/{{$s.ID}}/rollen">
+        <p class="hint">Sichtbar für (keine Auswahl = alle):</p>
+        {{range $.Roles}}{{if not .System}}
+        <label class="check"><input type="checkbox" name="role" value="{{.ID}}" {{if index $s.Selected .ID}}checked{{end}}> {{.Name}}</label>
+        {{end}}{{end}}
+        <button type="submit" class="small">Speichern</button>
+      </form>
+      <form method="post" action="/admin/startseite/{{$s.ID}}/loeschen">
+        <p class="hint">Löscht den Bereich mit seinen Kacheln. Die Widgets bleiben installiert.</p>
+        <label class="check"><input type="checkbox" name="confirm" required> wirklich löschen</label>
+        <button type="submit" class="danger small">Bereich löschen</button>
+      </form>
+    </div>
+  </details>
+</div>
+{{end}}
+
+<div class="card">
+  <h2>Neuer Bereich</h2>
+  <form class="row" method="post" action="/admin/startseite">
+    <input name="name" maxlength="64" required placeholder="z. B. Übersicht, Vertrieb, Team" aria-label="Name des Bereichs" class="name-input">
+    <button type="submit">Anlegen</button>
+  </form>
+</div>
+{{end}}

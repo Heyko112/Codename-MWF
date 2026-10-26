@@ -7,6 +7,9 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
+
+	"github.com/Heyko112/codename-mwf/internal/auth"
 )
 
 // Templates hält pro Seite ein fertig geparstes Template (Layout + Seite).
@@ -49,6 +52,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 			}
 		}
 		m["Can"] = can
+		if u := CurrentUser(r.Context()); u != nil {
+			s.layoutData(r, m, u)
+		}
 	}
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", data); err != nil {
@@ -59,6 +65,48 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	buf.WriteTo(w)
+}
+
+// layoutData füllt, was die Seitenleiste braucht: Design, aktiven Menüpunkt, Favoriten.
+func (s *Server) layoutData(r *http.Request, m map[string]any, u *auth.User) {
+	m["Theme"] = u.Theme
+	m["Path"] = r.URL.Path
+	m["Nav"] = navKey(r.URL.Path)
+	name := u.DisplayName
+	if name == "" {
+		name = u.Username
+	}
+	if rs := []rune(name); len(rs) > 0 {
+		m["Initial"] = strings.ToUpper(string(rs[0]))
+	}
+	favs, err := s.favoriteWidgets(r)
+	if err != nil {
+		slog.Error("Favoriten", "id", RequestIDFrom(r.Context()), "fehler", err)
+	}
+	m["Favs"] = favs
+}
+
+// navKey ordnet einen Pfad dem Menüpunkt der Seitenleiste zu.
+func navKey(path string) string {
+	switch {
+	case path == "/":
+		return "start"
+	case strings.HasPrefix(path, "/daten"):
+		return "daten"
+	case strings.HasPrefix(path, "/widgets"):
+		return "widgets"
+	case strings.HasPrefix(path, "/admin/benutzer"):
+		return "benutzer"
+	case strings.HasPrefix(path, "/admin/rollen"):
+		return "rollen"
+	case strings.HasPrefix(path, "/admin/tabellen"):
+		return "tabellen"
+	case strings.HasPrefix(path, "/admin/widgets"):
+		return "admin-widgets"
+	case strings.HasPrefix(path, "/admin/startseite"):
+		return "startseite"
+	}
+	return ""
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {

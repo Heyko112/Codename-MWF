@@ -1,5 +1,39 @@
 {{define "title"}}Start · MWF{{end}}
+{{define "wide"}} wide{{end}}
 {{define "content"}}
-<h1>Willkommen, {{with .User.DisplayName}}{{.}}{{else}}{{.User.Username}}{{end}}</h1>
-<p>Du bist mit Passwort und 2FA angemeldet.</p>
+<div class="hello">
+  <h1>Hallo {{with .User.DisplayName}}{{.}}{{else}}{{.User.Username}}{{end}}</h1>
+</div>
+{{if .Sections}}
+<nav class="tabs" aria-label="Bereiche">
+  {{range .Sections}}<a href="/?bereich={{.ID}}"{{if eq .ID $.Current.ID}} class="on" aria-current="page"{{end}}>{{.Name}}</a>{{end}}
+</nav>
+{{if .Tiles}}
+<script src="/static/widget-host.js"></script>
+<div class="tiles">
+  {{range .Tiles}}
+  <section class="tile tile-{{.Widget.Size}}">
+    <header class="tile-h">
+      <h3>{{.Widget.Name}}</h3>
+      <a href="/widgets/{{.Widget.ID}}" title="Vollbild" aria-label="{{.Widget.Name}} im Vollbild öffnen">{{template "ic-expand"}}</a>
+      <form method="post" action="/start/kacheln/{{.TileID}}/ausblenden"><button type="submit" title="Für mich ausblenden" aria-label="{{.Widget.Name}} ausblenden">{{template "ic-eyeoff"}}</button></form>
+    </header>
+    <iframe class="widget-frame" data-api="{{.API}}" src="{{.Src}}" sandbox="{{$.Sandbox}}" referrerpolicy="no-referrer" loading="lazy" title="{{.Widget.Name}}"></iframe>
+  </section>
+  {{end}}
+</div>
+{{else}}
+<p class="empty">{{if .Hidden}}Du hast alle Kacheln in diesem Bereich ausgeblendet.{{else}}In diesem Bereich liegen noch keine Kacheln für dich.{{end}}</p>
+{{end}}
+{{if .Hidden}}
+<details class="hidden-tiles">
+  <summary>{{len .Hidden}} ausgeblendete Kachel{{if gt (len .Hidden) 1}}n{{end}}</summary>
+  <ul>
+    {{range .Hidden}}<li><form method="post" action="/start/kacheln/{{.TileID}}/einblenden"><button type="submit" class="ghost small">{{.Widget.Name}} einblenden</button></form></li>{{end}}
+  </ul>
+</details>
+{{end}}
+{{else}}
+<p class="empty">Die Startseite ist noch leer.{{if index .Can "widgets.manage"}} Lege unter <a href="/admin/startseite">Startseite</a> Bereiche und Kacheln an.{{end}}</p>
+{{end}}
 {{end}}

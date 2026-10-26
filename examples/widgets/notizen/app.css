@@ -11,8 +11,15 @@ li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom
 li span { flex: 1; }
 li.done span { text-decoration: line-through; color: #7b8794; }
 li button { padding: 2px 8px; font-size: 13px; }
+/* Design der MWF-Oberfläche: mwf-widget.js setzt data-theme, ohne Angabe gilt das Betriebssystem */
+:root[data-theme="dark"] body { color: #e4e7eb; background: #141821; }
+:root[data-theme="dark"] input[name=text], :root[data-theme="dark"] button { background: #1d2230; color: inherit; border-color: #2f3647; }
+:root[data-theme="dark"] li { border-color: #252b3a; }
 @media (prefers-color-scheme: dark) {
-  body { color: #e4e7eb; background: #1f2933; }
-  input[name=text], button { background: #323f4b; color: inherit; border-color: #52606d; }
-  li { border-color: #3e4c59; }
+  :root:not([data-theme]) body { color: #e4e7eb; background: #141821; }
+  :root:not([data-theme]) input[name=text], :root:not([data-theme]) button { background: #1d2230; color: inherit; border-color: #2f3647; }
+  :root:not([data-theme]) li { border-color: #252b3a; }
 }
+/* Als Kachel kompakter */
+:root[data-ansicht="kachel"] main { padding: 10px 14px; }
+:root[data-ansicht="kachel"] h1 { display: none; }

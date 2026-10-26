@@ -4,6 +4,14 @@
 (function () {
   "use strict";
   if (window.mwf) return;
+  // Ansicht und Design kommen aus der Adresse: ?ansicht=kachel|vollbild&design=light|dark (fehlt = wie das Betriebssystem).
+  // Das Design steht danach als data-theme an <html>, Widgets können ihr CSS daran ausrichten.
+  var query = new URLSearchParams(location.search);
+  var view = query.get("ansicht") === "kachel" ? "kachel" : "vollbild";
+  var theme = query.get("design");
+  if (theme !== "light" && theme !== "dark") theme = "";
+  if (theme) document.documentElement.setAttribute("data-theme", theme);
+  document.documentElement.setAttribute("data-ansicht", view);
   var TIMEOUT = 15000;
   var seq = 0;
   var pending = {};
@@ -57,6 +65,10 @@
 
   window.mwf = {
     MwfError: MwfError,
+    /** "kachel" auf der Startseite, sonst "vollbild" */
+    view: view,
+    /** "light", "dark" oder "" (wie das Betriebssystem) */
+    theme: theme,
     context: function () { return call("context"); },
     tables: function () { return call("tables"); },
     list: function (table, o) { return call("list", opts(table, o)); },

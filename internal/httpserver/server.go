@@ -13,6 +13,7 @@ import (
 
 	"github.com/Heyko112/codename-mwf/internal/auth"
 	"github.com/Heyko112/codename-mwf/internal/authz"
+	"github.com/Heyko112/codename-mwf/internal/start"
 	"github.com/Heyko112/codename-mwf/internal/tables"
 	"github.com/Heyko112/codename-mwf/internal/widgets"
 )
@@ -27,11 +28,12 @@ type Server struct {
 	roles     *authz.Store
 	tables    *tables.Store
 	widgets   *widgets.Store
+	start     *start.Store
 	secrets   *auth.SecretBox
 }
 
 func New(db *sql.DB, sessions *scs.SessionManager, templates Templates, static fs.FS, secrets *auth.SecretBox) *Server {
-	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), roles: authz.NewStore(db), tables: tables.NewStore(db), widgets: widgets.NewStore(db), secrets: secrets}
+	return &Server{db: db, sessions: sessions, templates: templates, static: static, users: auth.NewStore(db), roles: authz.NewStore(db), tables: tables.NewStore(db), widgets: widgets.NewStore(db), start: start.NewStore(db), secrets: secrets}
 }
 
 // Handler registriert alle Routen und legt die Middleware-Kette darum.
@@ -50,6 +52,9 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("GET /login/2fa/einrichten", s.totpSetupForm)
 	pages.HandleFunc("POST /login/2fa/einrichten", s.totpSetupSubmit)
 	pages.HandleFunc("POST /logout", s.logout)
+	pages.HandleFunc("POST /einstellungen/design", s.requireLogin(s.setTheme))
+	pages.HandleFunc("POST /start/kacheln/{id}/ausblenden", s.requireLogin(s.hideTile))
+	pages.HandleFunc("POST /start/kacheln/{id}/einblenden", s.requireLogin(s.unhideTile))
 	users := func(h http.HandlerFunc) http.HandlerFunc { return s.requirePerm(authz.PermUsersManage, h) }
 	pages.HandleFunc("GET /admin/benutzer", users(s.adminUsers))
 	pages.HandleFunc("POST /admin/benutzer", users(s.adminCreateUser))
@@ -93,6 +98,7 @@ func (s *Server) Handler() http.Handler {
 
 	pages.HandleFunc("GET /widgets", s.requireLogin(s.widgetList))
 	pages.HandleFunc("GET /widgets/{id}", s.requireLogin(s.widgetView))
+	pages.HandleFunc("POST /widgets/{id}/favorit", s.requireLogin(s.toggleFavorite))
 	pages.HandleFunc("POST /api/widgets/{id}/call", s.requireLogin(s.widgetAPI))
 	wdg := func(h http.HandlerFunc) http.HandlerFunc { return s.requirePerm(authz.PermWidgetsManage, h) }
 	pages.HandleFunc("GET /admin/widgets", wdg(s.adminWidgets))
@@ -103,16 +109,23 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("POST /admin/widgets/{id}/aktivieren", wdg(s.adminActivateWidget))
 	pages.HandleFunc("POST /admin/widgets/{id}/deaktivieren", wdg(s.adminDeactivateWidget))
 	pages.HandleFunc("POST /admin/widgets/{id}/loeschen", wdg(s.adminDeleteWidget))
+	pages.HandleFunc("GET /admin/startseite", wdg(s.adminStart))
+	pages.HandleFunc("POST /admin/startseite", wdg(s.adminCreateSection))
+	pages.HandleFunc("POST /admin/startseite/{id}", wdg(s.adminRenameSection))
+	pages.HandleFunc("POST /admin/startseite/{id}/rollen", wdg(s.adminSetSectionRoles))
+	pages.HandleFunc("POST /admin/startseite/{id}/hoch", wdg(s.adminMoveSection(-1)))
+	pages.HandleFunc("POST /admin/startseite/{id}/runter", wdg(s.adminMoveSection(1)))
+	pages.HandleFunc("POST /admin/startseite/{id}/loeschen", wdg(s.adminDeleteSection))
+	pages.HandleFunc("POST /admin/startseite/{id}/kacheln", wdg(s.adminAddTile))
+	pages.HandleFunc("POST /admin/startseite/kacheln/{tile}/hoch", wdg(s.adminMoveTile(-1)))
+	pages.HandleFunc("POST /admin/startseite/kacheln/{tile}/runter", wdg(s.adminMoveTile(1)))
+	pages.HandleFunc("POST /admin/startseite/kacheln/{tile}/entfernen", wdg(s.adminRemoveTile))
 	pages.HandleFunc("/", s.notFound)
 	// Dateien für den abgeschotteten Widget-Rahmen: ohne Sitzung, geschützt durch die Marke in der Adresse
 	mux.HandleFunc("GET /w/{id}/{tok}/{path...}", s.widgetFile)
 	mux.Handle("/", s.sessions.LoadAndSave(pages))
 
 	return Chain(mux, RequestID, Logging, Recover, SecurityHeaders, CSRF)
-}
-
-func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, "home", map[string]any{"User": CurrentUser(r.Context())})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,8 @@
+{
+  "id": "uhr",
+  "name": "Uhr",
+  "version": "1.0.0",
+  "description": "Beispiel für eine kleine Kachel: Uhrzeit und Datum, folgt dem Design der Oberfläche.",
+  "size": "small",
+  "entry": "index.html"
+}
