@@ -34,6 +34,23 @@
 </div>
 </div>
 
+{{if .Widget.HasScripts}}
+<div class="card" id="server-skripte">
+  <h2>Server-Skripte</h2>
+  <p class="hint">Das Widget bringt Skripte mit, die im MWF-Server laufen (<code>server/main.js</code>). Sie dürfen nur, was der angemeldete Benutzer über das Widget darf.
+  Mit einer <strong>Service-Rolle</strong> dürfen sie zusätzlich ausdrücklich (<code>mwf.asService</code>) mit den Tabellenrechten dieser Rolle arbeiten, aber nur innerhalb der Freigaben oben unter „Daten“. Am besten eine eigene, versteckte Rolle nehmen. Schreiben über die Service-Rolle steht im Audit-Log.</p>
+  <form method="post" action="/admin/widgets/{{.Widget.ID}}/servicerolle" class="row">
+    <label>Service-Rolle
+      <select name="role">
+        <option value="0">– keine –</option>
+        {{range .Roles}}{{if not .System}}<option value="{{.ID}}" {{if $.Widget.ServiceRoleID.Valid}}{{if eq $.Widget.ServiceRoleID.Int64 .ID}}selected{{end}}{{end}}>{{.Name}}{{if .Hidden}} (versteckt){{end}}</option>{{end}}{{end}}
+      </select>
+    </label>
+    <button type="submit">Speichern</button>
+  </form>
+</div>
+{{end}}
+
 {{with .Import}}
 <div class="card">
   <h2>Aus JobRouter übernommen</h2>

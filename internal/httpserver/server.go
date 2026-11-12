@@ -107,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("POST /admin/widgets", wdg(s.adminUploadWidget))
 	pages.HandleFunc("GET /admin/widgets/{id}", wdg(s.adminWidgetDetail))
 	pages.HandleFunc("POST /admin/widgets/{id}/rollen", wdg(s.adminSetWidgetRoles))
+	pages.HandleFunc("POST /admin/widgets/{id}/servicerolle", wdg(s.adminSetServiceRole))
 	pages.HandleFunc("POST /admin/widgets/{id}/tabellen", wdg(s.adminSetWidgetTable))
 	pages.HandleFunc("POST /admin/widgets/{id}/tabellen/{alias}/anlegen", wdg(s.adminCreateWidgetTable))
 	pages.HandleFunc("POST /admin/widgets/{id}/tabellen/{alias}/spalten", wdg(s.adminAddMissingColumns))
