@@ -15,6 +15,7 @@
     <tr><th>Beschreibung</th><td>{{with .Widget.Description}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td></tr>
     <tr><th>Kachelgröße</th><td>{{.Widget.SizeLabel}}</td></tr>
     <tr><th>Startdatei</th><td><code>{{.Widget.Entry}}</code></td></tr>
+    <tr><th>Benutzer und Rollen</th><td>{{if eq .Users "read"}}darf lesen (Namen und Rollen aller sichtbaren Benutzer){{else}}<span class="muted">kein Zugriff</span>{{end}}</td></tr>
     <tr><th>Dateien</th><td>{{.Widget.FileCount}} ({{.Widget.TotalBytes}} Byte)</td></tr>
     <tr><th>Installiert</th><td>{{.Widget.InstalledAt.Local.Format "02.01.2006 15:04"}}{{if .Widget.UpdatedAt.Valid}}, aktualisiert {{.Widget.UpdatedAt.Time.Local.Format "02.01.2006 15:04"}}{{end}}</td></tr>
   </table>

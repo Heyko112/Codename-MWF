@@ -50,6 +50,7 @@ func TestParseRejects(t *testing.T) {
 		"„version“":                     {"manifest.json": `{"id":"a","name":"x","version":"1"}`, "index.html": "x"},
 		"Startdatei":                    {"manifest.json": okManifest},
 		"kein gültiges JSON":            {"manifest.json": "{", "index.html": "x"},
+		"„users“":                       {"manifest.json": `{"id":"a","name":"x","version":"1.0.0","users":"write"}`, "index.html": "x"},
 	}
 	for want, files := range cases {
 		_, err := Parse(zipOf(t, files))

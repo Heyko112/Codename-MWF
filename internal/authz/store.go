@@ -42,7 +42,7 @@ func (s *Store) Graph(ctx context.Context) (*Graph, error) {
 	}
 	infos := make([]*RoleInfo, len(roles))
 	for i, r := range roles {
-		infos[i] = &RoleInfo{ID: r.ID, Name: r.Name, System: r.System, Permissions: r.Permissions}
+		infos[i] = &RoleInfo{ID: r.ID, Name: r.Name, System: r.System, Hidden: r.Hidden, Permissions: r.Permissions}
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT parent_id, child_id FROM role_includes`)
 	if err != nil {

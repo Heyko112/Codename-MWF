@@ -95,7 +95,7 @@ func (s *Server) widgetCall(w http.ResponseWriter, r *http.Request) (any, error)
 	case "context":
 		u := CurrentUser(ctx)
 		return map[string]any{
-			"user":   map[string]any{"username": u.Username, "displayName": u.DisplayName},
+			"user":   map[string]any{"username": u.Username, "displayName": u.DisplayName, "roles": visibleRoleNames(g, acc)},
 			"widget": map[string]any{"id": wd.Slug, "name": wd.Name, "version": wd.Version},
 		}, nil
 	case "tables":
@@ -131,6 +131,10 @@ func (s *Server) widgetCall(w http.ResponseWriter, r *http.Request) (any, error)
 			out[f.Col.Key] = tables.ToJSON(f.Col, v)
 		}
 		return out, nil
+	case "users":
+		return s.apiUsers(r, wd, call.Params)
+	case "roles":
+		return s.apiRoles(r, wd)
 	case "list", "get", "create", "update", "delete":
 		return s.apiRecords(r, wd, call)
 	}
