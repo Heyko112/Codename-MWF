@@ -5,7 +5,8 @@
 type MwfValue = string | number | boolean | null;
 
 interface MwfContext {
-  user: { username: string; displayName: string };
+  /** roles: wirksame Rollen des Benutzers (auch über enthaltene Rollen), ohne versteckte */
+  user: { username: string; displayName: string; roles: string[] };
   widget: { id: string; name: string; version: string };
 }
 
@@ -46,6 +47,20 @@ interface MwfListOptions {
   search?: string;
 }
 
+interface MwfUser {
+  username: string;
+  displayName: string;
+  /** wirksame Rollen, ohne versteckte */
+  roles: string[];
+}
+
+interface MwfUsersOptions {
+  /** nur Mitglieder dieser Rolle (auch über enthaltene Rollen), Groß-/Kleinschreibung egal */
+  role?: string;
+  /** sucht in Login-Name und Anzeigename */
+  search?: string;
+}
+
 interface MwfError extends Error {
   name: "MwfError";
   /** not_found | forbidden | invalid | not_mapped | bad_request | session | network | timeout | busy | server | no_host */
@@ -64,6 +79,10 @@ interface Mwf {
   tables(): Promise<MwfTable[]>;
   /** Einstellungen aus manifest.json "settings", Werte vom Verwalter, nach Schlüssel */
   settings(): Promise<Record<string, MwfValue>>;
+  /** aktive Benutzer ohne versteckte und Service-User, nach Login-Name. Braucht im Manifest "users": "read". */
+  users(options?: MwfUsersOptions): Promise<MwfUser[]>;
+  /** alle nicht versteckten Rollen, nach Name. Braucht im Manifest "users": "read". */
+  roles(): Promise<{ name: string; description: string }[]>;
   /** neueste zuerst */
   list(table: string, options?: MwfListOptions): Promise<{ total: number; records: MwfRecord[] }>;
   get(table: string, id: number): Promise<MwfRecord>;

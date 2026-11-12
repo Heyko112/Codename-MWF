@@ -105,6 +105,21 @@ Werte: Text als String, Ganzzahl als Zahl, Dezimal als String (`"12.50"`), Datum
 
 Beispiel: `examples/widgets/notizen` (mit Bauplan für die Tabelle).
 
+**Benutzer und Rollen:** `mwf.context()` liefert neben dem Benutzer auch seine wirksamen Rollen (`user.roles`, auch über enthaltene Rollen). Damit kann ein Widget Knöpfe je Rolle zeigen. Braucht ein Widget die Liste aller Benutzer oder Rollen (etwa für eine Personenauswahl), fordert es das im Manifest an:
+
+```json
+"users": "read"
+```
+
+```js
+const { user } = await mwf.context();                // user.roles: ["HR", "Mitarbeiter"]
+const hr = await mwf.users({ role: "HR" });          // [{ username, displayName, roles }]
+const alle = await mwf.users({ search: "berg" });
+const rollen = await mwf.roles();                    // [{ name, description }]
+```
+
+Geliefert werden nur aktive Benutzer, keine versteckten und keine Service-User. Versteckte Rollen tauchen nirgends auf. Die Widget-Seite unter `/admin/widgets/<id>` zeigt, ob ein Widget diesen Zugriff hat. Ohne die Angabe antworten `users` und `roles` mit `forbidden`.
+
 **Grenze:** Die Abschottung schützt MWF vor dem Widget. Ein Widget sieht aber die Daten, die es lesen darf, und könnte seinen eigenen Rahmen auf eine fremde Seite umleiten. Nur Widgets aus vertrauenswürdiger Quelle installieren.
 
 ### JobRouter-Widgets übernehmen

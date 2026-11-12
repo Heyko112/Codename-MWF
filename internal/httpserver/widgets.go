@@ -361,6 +361,7 @@ func (s *Server) adminWidgetDetail(w http.ResponseWriter, r *http.Request) {
 		"Flash":      s.sessions.PopString(ctx, sessFlash),
 		"FlashError": s.sessions.PopString(ctx, sessFlashErr),
 		"Import":     widgets.ParseManifest(wd.Manifest).Import,
+		"Users":      widgets.ParseManifest(wd.Manifest).Users,
 	})
 }
 

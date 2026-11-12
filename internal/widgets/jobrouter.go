@@ -219,7 +219,7 @@ func fromJobRouter(files map[string][]byte) (map[string][]byte, bool) {
 		hints = append(hints, "getData() liest Daten aus JobRouter (getJobDB/SQL). In MWF über eine Tabelle im Manifest („tables“ mit Bauplan) und mwf.list() lösen.")
 	}
 	if jrUserRe.MatchString(php) {
-		hints = append(hints, "Benutzer oder JobFunctions kamen aus PHP. In MWF liefert mwf.context() den Benutzer, Rechte laufen über Rollen.")
+		hints = append(hints, "Benutzer oder JobFunctions kamen aus PHP. In MWF liefert mwf.context() den Benutzer mit seinen Rollen, mwf.users() die Benutzerliste (im Manifest \"users\": \"read\").")
 	}
 	if strings.Contains(php, "isAuthorized") && !jrAuthTrue.MatchString(php) {
 		hints = append(hints, "isAuthorized() hat die Sichtbarkeit eingeschränkt. In MWF unter „Sichtbar für Rollen“ einstellen.")

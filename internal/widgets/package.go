@@ -38,6 +38,7 @@ type Manifest struct {
 	Entry       string         `json:"entry"`
 	Tables      []TableRequest `json:"tables"`
 	Settings    []SettingDef   `json:"settings"`
+	Users       string         `json:"users"` // "read": darf Benutzer und Rollen lesen
 	Import      *ImportInfo    `json:"import,omitempty"`
 }
 
@@ -295,6 +296,9 @@ func (p *Package) check() error {
 		return InputError("manifest.json: „description“ darf höchstens 255 Zeichen lang sein.")
 	case Sizes[m.Size] == "":
 		return InputError("manifest.json: „size“ muss small, wide oder large sein.")
+	}
+	if m.Users != "" && m.Users != "read" {
+		return InputError("manifest.json: „users“ darf nur „read“ sein (Benutzer und Rollen lesen) oder fehlen.")
 	}
 	if len(m.Tables) > 20 {
 		return InputError("manifest.json: höchstens 20 Einträge unter „tables“.")

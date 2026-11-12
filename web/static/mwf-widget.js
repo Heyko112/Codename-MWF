@@ -72,6 +72,8 @@
     context: function () { return call("context"); },
     tables: function () { return call("tables"); },
     settings: function () { return call("settings"); },
+    users: function (o) { return call("users", o || {}); },
+    roles: function () { return call("roles"); },
     list: function (table, o) { return call("list", opts(table, o)); },
     get: function (table, id) { return call("get", { table: table, id: id }); },
     create: function (table, values) { return call("create", { table: table, values: values }); },

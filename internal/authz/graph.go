@@ -56,6 +56,7 @@ type RoleInfo struct {
 	ID          int64
 	Name        string
 	System      bool
+	Hidden      bool
 	Permissions []string
 }
 
