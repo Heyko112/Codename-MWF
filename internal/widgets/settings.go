@@ -99,16 +99,16 @@ func (s *Store) SyncSettings(ctx context.Context, ts *tables.Store, w *Widget, u
 		}
 	}
 	if rec == nil {
-		_, err = ts.InsertRecord(ctx, t, vals, userID)
+		_, err = ts.InsertRecord(ctx, t, vals, userID, tables.AllRows)
 	} else if len(vals) > 0 {
-		err = ts.UpdateRecord(ctx, t, rec.ID, vals, userID)
+		err = ts.UpdateRecord(ctx, t, rec.ID, vals, userID, tables.AllRows)
 	}
 	return t, err
 }
 
 // SettingsRecord liefert den Datensatz mit den Einstellungen (nil, wenn es noch keinen gibt).
 func (s *Store) SettingsRecord(ctx context.Context, ts *tables.Store, t *tables.Table) (*tables.Record, error) {
-	recs, _, err := ts.Records(ctx, t, "", 0, 1)
+	recs, _, err := ts.Records(ctx, t, tables.Query{Scope: tables.AllRows, Limit: 1})
 	if err != nil || len(recs) == 0 {
 		return nil, err
 	}

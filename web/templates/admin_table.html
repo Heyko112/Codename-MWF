@@ -99,6 +99,61 @@
   <p><a href="/daten/{{.Table.ID}}">Zu den Datensätzen →</a></p>
 </div>
 
+<div class="card" id="zeilenfilter">
+  <h2>Zeilenfilter</h2>
+  <p class="hint">Rechte nur an bestimmten Datensätzen. Eine Regel gilt für alle Mitglieder der Rolle und erlaubt die Zeilen, auf die alle ihre Bedingungen zutreffen.
+  Wie oben gilt additiv: Ein Benutzer darf eine Zeile, wenn irgendeine seiner Regeln oder ein Haken oben sie erlaubt. Hat eine Rolle oben schon einen Haken, braucht sie für dieses Recht keine Regel.
+  Platzhalter als Wert: <code>{ich}</code> = Login-Name des angemeldeten Benutzers, <code>{heute}</code> = heutiges Datum.</p>
+  {{with .RuleError}}<p class="error" role="alert">{{.}}</p>{{end}}
+  {{if .Rules}}
+  <div class="table-wrap">
+  <table class="list">
+    <thead><tr><th>Rolle</th><th>Rechte</th><th>Wenn</th><th></th></tr></thead>
+    <tbody>
+    {{range .Rules}}
+      <tr><td>{{.Role}}</td><td>{{.Perms}}</td><td>{{.Conds}}</td>
+        <td><form method="post" action="/admin/tabellen/{{$.Table.ID}}/regeln/{{.ID}}/loeschen"><button type="submit" class="small danger">Entfernen</button></form></td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}<p class="muted">Noch keine Zeilenfilter.</p>{{end}}
+
+  <h3>Neue Regel</h3>
+  <form method="post" action="/admin/tabellen/{{.Table.ID}}/regeln" class="rule-form">
+    <label>Rolle
+      <select name="role" required>
+        <option value="">– wählen –</option>
+        {{range .Roles}}{{if not .System}}<option value="{{.ID}}">{{.Name}}{{if .Hidden}} (versteckt){{end}}</option>{{end}}{{end}}
+      </select>
+    </label>
+    <fieldset class="inline">
+      <legend>Rechte</legend>
+      <label class="check"><input type="checkbox" name="perm" value="read" checked> Lesen</label>
+      <label class="check"><input type="checkbox" name="perm" value="create"> Anlegen</label>
+      <label class="check"><input type="checkbox" name="perm" value="update"> Ändern</label>
+      <label class="check"><input type="checkbox" name="perm" value="delete"> Löschen</label>
+    </fieldset>
+    <fieldset>
+      <legend>Wenn (alle Bedingungen zusammen)</legend>
+      {{range $i := .CondRows}}
+      <div class="cond-row">
+        <select name="col{{$i}}" aria-label="Spalte {{$i}}">
+          <option value="">{{if $i}}– keine weitere –{{else}}– Spalte –{{end}}</option>
+          {{range $.Table.Columns}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+          <option value="0">Angelegt von</option>
+        </select>
+        <select name="op{{$i}}" aria-label="Vergleich {{$i}}">
+          {{range $.Ops}}<option value="{{.Code}}">{{.Label}}</option>{{end}}
+        </select>
+        <input name="val{{$i}}" placeholder="Wert oder {ich}" aria-label="Wert {{$i}}" maxlength="255">
+      </div>
+      {{end}}
+    </fieldset>
+    <button type="submit">Regel speichern</button>
+  </form>
+</div>
+
 <div class="card narrow-left">
   <h2>Tabelle löschen</h2>
   <p>Löscht die Tabelle mit allen {{.Table.RowCount}} Datensätzen. Das lässt sich nicht rückgängig machen.</p>

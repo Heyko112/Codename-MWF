@@ -47,6 +47,7 @@ Mit dem Recht „Tabellen definieren“ erscheint oben **Tabellen** (`/admin/tab
 Unter **Daten** (`/daten`) sieht jeder angemeldete Benutzer die Tabellen, für die er Rechte hat, und kann dort Datensätze suchen, anlegen, ändern und löschen.
 
 - Die Rechte vergibst du auf der Tabellenseite unter „Rechte an den Datensätzen“ je Rolle: Lesen, Anlegen, Ändern, Löschen. Sie gelten additiv auch über enthaltene Rollen, Anlegen, Ändern und Löschen schließen Lesen ein. „Administratoren“ dürfen immer alles.
+- **Zeilenfilter:** Darunter legst du Regeln an, die einer Rolle Rechte nur an bestimmten Datensätzen geben, z. B. „Mitarbeiter: Lesen, Anlegen, Ändern, wenn Person ist gleich {ich}“. Die Bedingungen einer Regel gelten zusammen, mehrere Regeln und Haken addieren sich. Vergleiche: ist gleich, ist nicht, kleiner/größer, höchstens/mindestens, enthält, ist leer, ist nicht leer. Platzhalter: `{ich}` (Login-Name, für Text-Spalten und „Angelegt von“) und `{heute}` (für Datums-Spalten). Der Filter gilt beim Lesen und beim Schreiben: Ändern und Löschen nur bei passenden Zeilen, ein neuer oder geänderter Datensatz muss danach noch passen. Er gilt überall gleich, in der Datenansicht und in Widgets. Fehlt eine Spalte einer Regel (gelöscht), erlaubt die Regel nichts mehr.
 - Wer keine Rechte an einer Tabelle hat, bekommt 404, die Tabelle ist für ihn unsichtbar.
 - Zahlen in deutscher Schreibweise (1.234,56), Datum als 31.12.2026. Gesucht wird in Textfeldern und nach ID, 50 Datensätze je Seite.
 - Gelöschte Datensätze landen im `audit_log`.
@@ -102,6 +103,17 @@ await mwf.remove("notizen", rec.id);
 ```
 
 Werte: Text als String, Ganzzahl als Zahl, Dezimal als String (`"12.50"`), Datum `"YYYY-MM-DD"`, Datum/Uhrzeit `"YYYY-MM-DDTHH:MM:SS"`, Ja/Nein als `true`/`false`, leer als `null`. Fehler kommen als `mwf.MwfError` mit `code` (z. B. `forbidden`, `invalid`, `not_mapped`) und bei `invalid` mit `fields` je Spalte. Löschen über ein Widget steht im Audit-Log.
+
+Such-Filter und Sortierung schränken nur weiter ein, die Zeilenfilter der Rechte gelten immer (`mwf.tables()` meldet sie als `filtered: true`):
+
+```js
+const { records } = await mwf.list("urlaub", {
+  where: [ { col: "person", op: "eq", value: "{ich}" }, { col: "von", op: "ge", value: "{heute}" } ],
+  order: "von"                                        // "-von" = absteigend, Standard: neueste zuerst
+});
+```
+
+Vergleiche wie bei den Zeilenfiltern (`eq`, `ne`, `lt`, `le`, `gt`, `ge`, `contains`, `empty`, `notempty`), `col: "createdBy"` steht für „angelegt von“.
 
 Beispiel: `examples/widgets/notizen` (mit Bauplan für die Tabelle).
 

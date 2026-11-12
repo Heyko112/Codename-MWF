@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Heyko112/codename-mwf/internal/tables"
 	"github.com/Heyko112/codename-mwf/internal/widgets"
@@ -49,7 +50,8 @@ type apiCall struct {
 type apiTable struct {
 	grant widgets.Grant
 	table *tables.Table // nil, wenn keine Tabelle zugeordnet ist
-	perms tables.Perms  // wirksam
+	acc   tables.Access // wirksam: Rechte des Benutzers ∩ Freigabe des Widgets
+	perms tables.Perms  // zusammengefasst
 }
 
 func (s *Server) widgetAPI(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +150,7 @@ func (s *Server) apiTables(r *http.Request, wd *widgets.Widget) ([]apiTable, err
 	if err != nil {
 		return nil, err
 	}
-	perms, admin, err := s.tablePerms(r)
+	access, admin, err := s.tableAccess(r)
 	if err != nil {
 		return nil, err
 	}
@@ -161,28 +163,14 @@ func (s *Server) apiTables(r *http.Request, wd *widgets.Widget) ([]apiTable, err
 				return nil, err
 			}
 			if t != nil {
-				up := perms[t.ID]
-				if admin {
-					up = tables.AllPerms
-				}
 				at.table = t
-				at.perms = intersect(up, gr.Granted)
+				at.acc = accessFor(access, admin, t.ID).Limit(gr.Granted)
+				at.perms = at.acc.Perms()
 			}
 		}
 		out[i] = at
 	}
 	return out, nil
-}
-
-// intersect bildet Recht des Benutzers ∩ Freigabe des Widgets. Beim Benutzer schließt jedes Recht Lesen ein,
-// beim Widget nur Ändern und Löschen: Ein reines Erfassungs-Widget (nur Anlegen) liest nichts.
-func intersect(user, grant tables.Perms) tables.Perms {
-	return tables.Perms{
-		Read:   user.Any() && (grant.Read || grant.Update || grant.Delete),
-		Create: user.Create && grant.Create,
-		Update: user.Update && grant.Update,
-		Delete: user.Delete && grant.Delete,
-	}
 }
 
 func describeAPITable(t apiTable) map[string]any {
@@ -191,6 +179,7 @@ func describeAPITable(t apiTable) map[string]any {
 		"description": t.grant.Description,
 		"mapped":      t.table != nil,
 		"perms":       map[string]bool{"read": t.perms.Read, "create": t.perms.Create, "update": t.perms.Update, "delete": t.perms.Delete},
+		"filtered":    t.table != nil && t.perms.Read && t.acc.Filtered(),
 	}
 	if t.table != nil && t.perms.Any() {
 		cols := []any{}
@@ -221,6 +210,86 @@ type recordParams struct {
 	Limit  int                        `json:"limit"`
 	Offset int                        `json:"offset"`
 	Search string                     `json:"search"`
+	Where  []apiCond                  `json:"where"`
+	Order  string                     `json:"order"`
+}
+
+// apiCond ist ein Such-Filter aus dem Widget. Er schränkt nur weiter ein, die Zeilenfilter gelten immer.
+type apiCond struct {
+	Col   string          `json:"col"`
+	Op    string          `json:"op"`
+	Value json.RawMessage `json:"value"`
+}
+
+const apiKeyCreatedBy = "createdBy"
+
+func apiColumn(t *tables.Table, key string) (int64, bool) {
+	if key == apiKeyCreatedBy {
+		return tables.ColCreatedBy, true
+	}
+	for _, c := range t.Columns {
+		if c.Key == key {
+			return c.ID, true
+		}
+	}
+	return 0, false
+}
+
+// apiWhere wandelt die Filter des Widgets in Bedingungen um. Werte wie bei create, dazu {ich} und {heute}.
+func apiWhere(t *tables.Table, in []apiCond) ([]tables.Cond, error) {
+	if len(in) > tables.MaxConds {
+		return nil, apiErr(http.StatusBadRequest, "bad_request", "where: höchstens "+strconv.Itoa(tables.MaxConds)+" Bedingungen.")
+	}
+	out := make([]tables.Cond, 0, len(in))
+	for _, w := range in {
+		id, ok := apiColumn(t, w.Col)
+		if !ok {
+			return nil, apiErr(http.StatusBadRequest, "bad_request", "where: Unbekannte Spalte „"+w.Col+"“.")
+		}
+		val := ""
+		if len(w.Value) > 0 && string(w.Value) != "null" {
+			var v any
+			if err := json.Unmarshal(w.Value, &v); err != nil {
+				return nil, errAPIBadParams
+			}
+			switch x := v.(type) {
+			case string:
+				val = x
+			case bool:
+				val = "nein"
+				if x {
+					val = "ja"
+				}
+			case float64:
+				val = strconv.FormatFloat(x, 'f', -1, 64)
+			default:
+				return nil, apiErr(http.StatusBadRequest, "bad_request", "where: Wert bei „"+w.Col+"“ muss Text, Zahl oder Ja/Nein sein.")
+			}
+		}
+		c := tables.Cond{Col: id, Op: w.Op, Val: val}
+		if err := tables.CheckCond(t, c); err != nil {
+			return nil, apiErr(http.StatusBadRequest, "bad_request", "where „"+w.Col+"“: "+err.Error())
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// apiOrder liest z. B. "datum" oder "-datum" (absteigend). "id" sortiert nach Anlage.
+func apiOrder(t *tables.Table, order string) ([]tables.Sort, error) {
+	if order == "" {
+		return nil, nil
+	}
+	desc := strings.HasPrefix(order, "-")
+	key := strings.TrimPrefix(order, "-")
+	if key == "id" {
+		return []tables.Sort{{Col: tables.ColCreatedBy, Desc: desc}}, nil
+	}
+	id, ok := apiColumn(t, key)
+	if !ok || id == tables.ColCreatedBy {
+		return nil, apiErr(http.StatusBadRequest, "bad_request", "order: Unbekannte Spalte „"+key+"“.")
+	}
+	return []tables.Sort{{Col: id, Desc: desc}}, nil
 }
 
 func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (any, error) {
@@ -251,6 +320,9 @@ func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (
 		return nil, apiErr(http.StatusForbidden, "forbidden", "Keine Berechtigung für „"+call.Method+"“ in „"+p.Table+"“.")
 	}
 	uid := CurrentUser(ctx).ID
+	vars := rowVars(r)
+	scope := func(action string) tables.Scope { return at.acc.Scope(t, action, vars) }
+	outOfScope := apiErr(http.StatusForbidden, "forbidden", tables.ErrOutOfScope.Error())
 
 	switch call.Method {
 	case "list":
@@ -260,7 +332,16 @@ func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (
 		if p.Limit > apiMaxLimit || p.Offset < 0 {
 			return nil, apiErr(http.StatusBadRequest, "bad_request", "limit höchstens "+strconv.Itoa(apiMaxLimit)+", offset nicht negativ.")
 		}
-		recs, total, err := s.tables.Records(ctx, t, p.Search, p.Offset, p.Limit)
+		where, err := apiWhere(t, p.Where)
+		if err != nil {
+			return nil, err
+		}
+		order, err := apiOrder(t, p.Order)
+		if err != nil {
+			return nil, err
+		}
+		recs, total, err := s.tables.Records(ctx, t, tables.Query{
+			Scope: scope(tables.ActRead), Search: p.Search, Where: where, Vars: vars, Order: order, Offset: p.Offset, Limit: p.Limit})
 		if err != nil {
 			return nil, err
 		}
@@ -270,17 +351,20 @@ func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (
 		}
 		return map[string]any{"total": total, "records": out}, nil
 	case "get":
-		return s.apiGet(r, t, p.ID)
+		return s.apiGet(r, t, p.ID, scope(tables.ActRead))
 	case "create":
 		values, err := apiValues(t, p.Values, true)
 		if err != nil {
 			return nil, err
 		}
-		id, err := s.tables.InsertRecord(ctx, t, values, uid)
-		if err != nil {
+		id, err := s.tables.InsertRecord(ctx, t, values, uid, scope(tables.ActCreate))
+		if errors.Is(err, tables.ErrOutOfScope) {
+			return nil, outOfScope
+		} else if err != nil {
 			return nil, err
 		}
-		return s.apiGet(r, t, id)
+		// Der eben angelegte Datensatz geht zurück, auch wenn das Widget nur anlegen darf
+		return s.apiGet(r, t, id, tables.AllRows)
 	case "update":
 		if p.ID <= 0 {
 			return nil, errAPIBadParams
@@ -289,17 +373,19 @@ func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (
 		if err != nil {
 			return nil, err
 		}
-		if err := s.tables.UpdateRecord(ctx, t, p.ID, values, uid); errors.Is(err, tables.ErrNotFound) {
+		if err := s.tables.UpdateRecord(ctx, t, p.ID, values, uid, scope(tables.ActUpdate)); errors.Is(err, tables.ErrNotFound) {
 			return nil, errAPINotFound
+		} else if errors.Is(err, tables.ErrOutOfScope) {
+			return nil, outOfScope
 		} else if err != nil {
 			return nil, err
 		}
-		return s.apiGet(r, t, p.ID)
+		return s.apiGet(r, t, p.ID, tables.AllRows)
 	default: // delete
 		if p.ID <= 0 {
 			return nil, errAPIBadParams
 		}
-		if err := s.tables.DeleteRecord(ctx, t, p.ID); errors.Is(err, tables.ErrNotFound) {
+		if err := s.tables.DeleteRecord(ctx, t, p.ID, scope(tables.ActDelete)); errors.Is(err, tables.ErrNotFound) {
 			return nil, errAPINotFound
 		} else if err != nil {
 			return nil, err
@@ -310,8 +396,8 @@ func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (
 	}
 }
 
-func (s *Server) apiGet(r *http.Request, t *tables.Table, id int64) (any, error) {
-	rec, err := s.tables.RecordByID(r.Context(), t, id)
+func (s *Server) apiGet(r *http.Request, t *tables.Table, id int64, scope tables.Scope) (any, error) {
+	rec, err := s.tables.RecordByID(r.Context(), t, id, scope)
 	if errors.Is(err, tables.ErrNotFound) {
 		return nil, errAPINotFound
 	}

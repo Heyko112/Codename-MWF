@@ -115,12 +115,29 @@ func (s *Server) adminTableDetail(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	rules, err := s.tables.Rules(ctx, t.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	roleNames := map[int64]string{}
+	for _, ro := range roles {
+		roleNames[ro.ID] = ro.Name
+	}
+	var ruleRows []ruleRow
+	for _, ru := range rules {
+		ruleRows = append(ruleRows, ruleRow{ID: ru.ID, Role: roleNames[ru.RoleID], Perms: permWords(ru.Perms), Conds: tables.DescribeConds(t, ru.Conds)})
+	}
 	s.render(w, r, http.StatusOK, "admin_table", map[string]any{
 		"User":      CurrentUser(ctx),
 		"Table":     t,
 		"Types":     tables.Types,
 		"Roles":     roles,
 		"RolePerms": perms,
+		"Rules":     ruleRows,
+		"Ops":       tables.Ops,
+		"CondRows":  []int{0, 1, 2},
+		"RuleError": s.sessions.PopString(ctx, sessFlashErr),
 		"Flash":     s.sessions.PopString(ctx, sessFlash),
 	})
 }
@@ -311,4 +328,85 @@ func permLetters(p tables.Perms) string {
 		}
 	}
 	return out
+}
+
+type ruleRow struct {
+	ID                 int64
+	Role, Perms, Conds string
+}
+
+// adminAddRule legt einen Zeilenfilter an. Felder: role, perm (mehrfach), col0..2, op0..2, val0..2.
+func (s *Server) adminAddRule(w http.ResponseWriter, r *http.Request) {
+	t, ok := s.loadTable(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	r.ParseForm()
+	roleID, _ := strconv.ParseInt(r.PostFormValue("role"), 10, 64)
+	role, err := s.roles.RoleByID(ctx, roleID)
+	if err != nil || role.System {
+		s.errorRedirect(w, r, "Bitte eine Rolle wählen.", tableURL(t.ID)+"#zeilenfilter")
+		return
+	}
+	var p tables.Perms
+	for _, v := range r.PostForm["perm"] {
+		switch v {
+		case "read":
+			p.Read = true
+		case "create":
+			p.Create = true
+		case "update":
+			p.Update = true
+		case "delete":
+			p.Delete = true
+		}
+	}
+	var conds []tables.Cond
+	for i := 0; i < tables.MaxConds; i++ {
+		n := strconv.Itoa(i)
+		colRaw := r.PostFormValue("col" + n)
+		if colRaw == "" {
+			continue
+		}
+		col, err := strconv.ParseInt(colRaw, 10, 64)
+		if err != nil {
+			continue
+		}
+		c := tables.Cond{Col: col, Op: r.PostFormValue("op" + n), Val: strings.TrimSpace(r.PostFormValue("val" + n))}
+		if err := tables.CheckCond(t, c); err != nil {
+			s.errorRedirect(w, r, "Bedingung "+strconv.Itoa(i+1)+": "+err.Error(), tableURL(t.ID)+"#zeilenfilter")
+			return
+		}
+		conds = append(conds, c)
+	}
+	if _, err := s.tables.AddRule(ctx, t, role.ID, p, conds); err != nil {
+		var ie tables.InputError
+		if errors.As(err, &ie) {
+			s.errorRedirect(w, r, ie.Error(), tableURL(t.ID)+"#zeilenfilter")
+			return
+		}
+		s.serverError(w, r, err)
+		return
+	}
+	s.auditDetail(r, 0, "table_rule_added", t.Name+" durch "+CurrentUser(ctx).Username+": "+role.Name+" "+permLetters(p)+" wenn "+tables.DescribeConds(t, conds))
+	s.flashRedirect(w, r, "Zeilenfilter für „"+role.Name+"“ gespeichert.", tableURL(t.ID)+"#zeilenfilter")
+}
+
+func (s *Server) adminDeleteRule(w http.ResponseWriter, r *http.Request) {
+	t, ok := s.loadTable(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathID(r, "rule")
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	if err := s.tables.DeleteRule(r.Context(), t.ID, id); err != nil && !errors.Is(err, tables.ErrNotFound) {
+		s.serverError(w, r, err)
+		return
+	}
+	s.auditDetail(r, 0, "table_rule_deleted", t.Name+" Regel "+strconv.FormatInt(id, 10)+" durch "+CurrentUser(r.Context()).Username)
+	s.flashRedirect(w, r, "Zeilenfilter entfernt.", tableURL(t.ID)+"#zeilenfilter")
 }

@@ -4,6 +4,7 @@
 <h1>{{.Table.Name}}</h1>
 {{with .Table.Description}}<p class="muted">{{.}}</p>{{end}}
 {{with .Flash}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{if .Filtered}}<p class="hint">Du siehst nur die Datensätze, die deine Zeilenfilter erlauben.</p>{{end}}
 
 <div class="toolbar">
   <form class="row" method="get" action="/daten/{{.Table.ID}}">

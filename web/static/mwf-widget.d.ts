@@ -27,6 +27,8 @@ interface MwfTable {
   mapped: boolean;
   /** wirksam: Recht des Benutzers ∩ Freigabe des Widgets */
   perms: MwfPerms;
+  /** true, wenn der Benutzer nur einen Teil der Zeilen lesen darf (Zeilenfilter) */
+  filtered: boolean;
   /** nur, wenn zugeordnet und irgendein Recht besteht */
   columns?: MwfColumn[];
 }
@@ -45,6 +47,18 @@ interface MwfListOptions {
   offset?: number;
   /** sucht in Text-Spalten und nach ID */
   search?: string;
+  /** schränkt weiter ein (alle Bedingungen zusammen). Die Zeilenfilter der Rechte gelten immer. */
+  where?: MwfCondition[];
+  /** Spaltenschlüssel, "-" davor = absteigend, z. B. "-datum". Standard: neueste zuerst ("-id") */
+  order?: string;
+}
+
+interface MwfCondition {
+  /** Spaltenschlüssel oder "createdBy" (angelegt von, Wert "{ich}" oder Login-Name) */
+  col: string;
+  op: "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "contains" | "empty" | "notempty";
+  /** wie bei create; dazu "{ich}" (Login-Name) und "{heute}" (Datum). Bei empty/notempty weglassen. */
+  value?: MwfValue;
 }
 
 interface MwfUser {
@@ -83,7 +97,7 @@ interface Mwf {
   users(options?: MwfUsersOptions): Promise<MwfUser[]>;
   /** alle nicht versteckten Rollen, nach Name. Braucht im Manifest "users": "read". */
   roles(): Promise<{ name: string; description: string }[]>;
-  /** neueste zuerst */
+  /** neueste zuerst, wenn options.order fehlt. Nur Zeilen, die der Benutzer lesen darf. */
   list(table: string, options?: MwfListOptions): Promise<{ total: number; records: MwfRecord[] }>;
   get(table: string, id: number): Promise<MwfRecord>;
   create(table: string, values: Record<string, MwfValue>): Promise<MwfRecord>;
