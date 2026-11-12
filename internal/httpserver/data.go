@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Heyko112/codename-mwf/internal/tables"
@@ -13,9 +15,9 @@ import (
 
 const recordsPerPage = 50
 
-// tablePerms liefert die Rechte des angemeldeten Benutzers je Tabelle.
+// tableAccess liefert die Rechte des angemeldeten Benutzers je Tabelle.
 // Administratoren dürfen alles, alle anderen erben additiv über ihre wirksamen Rollen.
-func (s *Server) tablePerms(r *http.Request) (map[int64]tables.Perms, bool, error) {
+func (s *Server) tableAccess(r *http.Request) (map[int64]tables.Access, bool, error) {
 	g, acc := CurrentAccess(r.Context())
 	if acc.IsAdmin(g) {
 		return nil, true, nil
@@ -24,29 +26,49 @@ func (s *Server) tablePerms(r *http.Request) (map[int64]tables.Perms, bool, erro
 	for id := range acc.Roles {
 		roleIDs = append(roleIDs, id)
 	}
-	m, err := s.tables.UserPerms(r.Context(), roleIDs)
+	m, err := s.tables.UserAccess(r.Context(), roleIDs)
 	return m, false, err
 }
 
+func accessFor(m map[int64]tables.Access, admin bool, tableID int64) tables.Access {
+	if admin {
+		return tables.FullAccess
+	}
+	return m[tableID]
+}
+
+// rowVars sind die Werte für {ich} und {heute}.
+func rowVars(r *http.Request) tables.Vars {
+	u := CurrentUser(r.Context())
+	return tables.Vars{UserID: u.ID, Username: u.Username, Today: time.Now()}
+}
+
+// dataTable ist eine Tabelle mit den Rechten des Benutzers.
+type dataTable struct {
+	*tables.Table
+	acc  tables.Access
+	vars tables.Vars
+}
+
+func (d dataTable) scope(action string) tables.Scope { return d.acc.Scope(d.Table, action, d.vars) }
+
 // loadDataTable liest die Tabelle aus dem Pfad und prüft, dass der Benutzer sie überhaupt sehen darf.
 // Ohne Recht antwortet sie mit 404, damit niemand fremde Tabellen erraten kann.
-func (s *Server) loadDataTable(w http.ResponseWriter, r *http.Request) (*tables.Table, tables.Perms, bool) {
-	perms, admin, err := s.tablePerms(r)
+func (s *Server) loadDataTable(w http.ResponseWriter, r *http.Request) (dataTable, tables.Perms, bool) {
+	m, admin, err := s.tableAccess(r)
 	if err != nil {
 		s.serverError(w, r, err)
-		return nil, tables.Perms{}, false
+		return dataTable{}, tables.Perms{}, false
 	}
 	id, ok := pathID(r, "id")
-	p := perms[id]
-	if admin {
-		p = tables.AllPerms
-	}
+	acc := accessFor(m, admin, id)
+	p := acc.Perms()
 	if !ok || !p.Any() {
 		s.notFound(w, r)
-		return nil, tables.Perms{}, false
+		return dataTable{}, tables.Perms{}, false
 	}
 	t, ok := s.loadTable(w, r)
-	return t, p, ok
+	return dataTable{Table: t, acc: acc, vars: rowVars(r)}, p, ok
 }
 
 func dataURL(id int64) string { return "/daten/" + strconv.FormatInt(id, 10) }
@@ -55,7 +77,7 @@ func recordURL(t, rec int64) string { return dataURL(t) + "/" + strconv.FormatIn
 
 func (s *Server) dataTables(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	perms, admin, err := s.tablePerms(r)
+	access, admin, err := s.tableAccess(r)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -67,7 +89,7 @@ func (s *Server) dataTables(w http.ResponseWriter, r *http.Request) {
 	}
 	var list []*tables.Table
 	for _, t := range all {
-		if admin || perms[t.ID].Any() {
+		if accessFor(access, admin, t.ID).Perms().Any() {
 			list = append(list, t)
 		}
 	}
@@ -98,7 +120,8 @@ func (s *Server) dataRecords(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
-	recs, total, err := s.tables.Records(ctx, t, q, (page-1)*recordsPerPage, recordsPerPage)
+	recs, total, err := s.tables.Records(ctx, t.Table, tables.Query{
+		Scope: t.scope(tables.ActRead), Search: q, Offset: (page - 1) * recordsPerPage, Limit: recordsPerPage})
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -126,15 +149,16 @@ func (s *Server) dataRecords(w http.ResponseWriter, r *http.Request) {
 		return dataURL(t.ID) + "?" + v.Encode()
 	}
 	data := map[string]any{
-		"User":  CurrentUser(ctx),
-		"Table": t,
-		"Perms": p,
-		"Rows":  rows,
-		"Total": total,
-		"Query": q,
-		"Page":  page,
-		"Pages": pages,
-		"Flash": s.sessions.PopString(ctx, sessFlash),
+		"User":     CurrentUser(ctx),
+		"Table":    t.Table,
+		"Perms":    p,
+		"Filtered": t.acc.Filtered(),
+		"Rows":     rows,
+		"Total":    total,
+		"Query":    q,
+		"Page":     page,
+		"Pages":    pages,
+		"Flash":    s.sessions.PopString(ctx, sessFlash),
 	}
 	if page > 1 {
 		data["Prev"] = link(page - 1)
@@ -154,12 +178,12 @@ type field struct {
 }
 
 // renderRecord zeigt das Formular für einen neuen oder bestehenden Datensatz.
-func (s *Server) renderRecord(w http.ResponseWriter, r *http.Request, status int, t *tables.Table, p tables.Perms, rec *tables.Record, fields []field, problem string) {
+func (s *Server) renderRecord(w http.ResponseWriter, r *http.Request, status int, t dataTable, p tables.Perms, rec *tables.Record, fields []field, problem string) {
 	ctx := r.Context()
 	editable := (rec == nil && p.Create) || (rec != nil && p.Update)
 	data := map[string]any{
 		"User":     CurrentUser(ctx),
-		"Table":    t,
+		"Table":    t.Table,
 		"Perms":    p,
 		"Record":   rec,
 		"Fields":   fields,
@@ -230,7 +254,7 @@ func (s *Server) dataNewForm(w http.ResponseWriter, r *http.Request) {
 		s.forbidden(w, r, "Du darfst in „"+t.Name+"“ keine Datensätze anlegen.")
 		return
 	}
-	s.renderRecord(w, r, http.StatusOK, t, p, nil, recordFields(t, nil), "")
+	s.renderRecord(w, r, http.StatusOK, t, p, nil, recordFields(t.Table, nil), "")
 }
 
 func (s *Server) dataCreate(w http.ResponseWriter, r *http.Request) {
@@ -242,42 +266,58 @@ func (s *Server) dataCreate(w http.ResponseWriter, r *http.Request) {
 		s.forbidden(w, r, "Du darfst in „"+t.Name+"“ keine Datensätze anlegen.")
 		return
 	}
-	values, fields, valid := parseRecord(r, t)
+	values, fields, valid := parseRecord(r, t.Table)
 	if !valid {
 		s.renderRecord(w, r, http.StatusUnprocessableEntity, t, p, nil, fields, "Bitte die markierten Felder prüfen.")
 		return
 	}
-	id, err := s.tables.InsertRecord(r.Context(), t, values, CurrentUser(r.Context()).ID)
+	id, err := s.tables.InsertRecord(r.Context(), t.Table, values, CurrentUser(r.Context()).ID, t.scope(tables.ActCreate))
+	if errors.Is(err, tables.ErrOutOfScope) {
+		s.renderRecord(w, r, http.StatusUnprocessableEntity, t, p, nil, fields, err.Error()+" "+t.allowedText(tables.ActCreate))
+		return
+	}
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	to := recordURL(t.ID, id)
-	if !p.Update {
+	if ok, _ := s.tables.InScope(r.Context(), t.Table, id, t.scope(tables.ActUpdate)); !p.Update || !ok {
 		to = dataURL(t.ID)
 	}
 	s.flashRedirect(w, r, "Datensatz "+strconv.FormatInt(id, 10)+" angelegt.", to)
 }
 
 // loadRecord liest Tabelle und Datensatz aus dem Pfad.
-func (s *Server) loadRecord(w http.ResponseWriter, r *http.Request) (*tables.Table, tables.Perms, *tables.Record, bool) {
+// Ändern und Löschen sind in p nur gesetzt, wenn der Datensatz dafür in den Zeilenfiltern liegt.
+func (s *Server) loadRecord(w http.ResponseWriter, r *http.Request) (dataTable, tables.Perms, *tables.Record, bool) {
 	t, p, ok := s.loadDataTable(w, r)
 	if !ok {
-		return nil, p, nil, false
+		return t, p, nil, false
 	}
 	id, ok := pathID(r, "rec")
 	if !ok {
 		s.notFound(w, r)
-		return nil, p, nil, false
+		return t, p, nil, false
 	}
-	rec, err := s.tables.RecordByID(r.Context(), t, id)
+	rec, err := s.tables.RecordByID(r.Context(), t.Table, id, t.scope(tables.ActRead))
 	if errors.Is(err, tables.ErrNotFound) {
 		s.notFound(w, r)
-		return nil, p, nil, false
+		return t, p, nil, false
 	}
 	if err != nil {
 		s.serverError(w, r, err)
-		return nil, p, nil, false
+		return t, p, nil, false
+	}
+	for _, x := range []struct {
+		on     *bool
+		action string
+	}{{&p.Update, tables.ActUpdate}, {&p.Delete, tables.ActDelete}} {
+		if *x.on {
+			if *x.on, err = s.tables.InScope(r.Context(), t.Table, rec.ID, t.scope(x.action)); err != nil {
+				s.serverError(w, r, err)
+				return t, p, nil, false
+			}
+		}
 	}
 	return t, p, rec, true
 }
@@ -287,7 +327,7 @@ func (s *Server) dataRecord(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.renderRecord(w, r, http.StatusOK, t, p, rec, recordFields(t, rec), "")
+	s.renderRecord(w, r, http.StatusOK, t, p, rec, recordFields(t.Table, rec), "")
 }
 
 func (s *Server) dataUpdate(w http.ResponseWriter, r *http.Request) {
@@ -299,12 +339,16 @@ func (s *Server) dataUpdate(w http.ResponseWriter, r *http.Request) {
 		s.forbidden(w, r, "Du darfst in „"+t.Name+"“ keine Datensätze ändern.")
 		return
 	}
-	values, fields, valid := parseRecord(r, t)
+	values, fields, valid := parseRecord(r, t.Table)
 	if !valid {
 		s.renderRecord(w, r, http.StatusUnprocessableEntity, t, p, rec, fields, "Bitte die markierten Felder prüfen.")
 		return
 	}
-	err := s.tables.UpdateRecord(r.Context(), t, rec.ID, values, CurrentUser(r.Context()).ID)
+	err := s.tables.UpdateRecord(r.Context(), t.Table, rec.ID, values, CurrentUser(r.Context()).ID, t.scope(tables.ActUpdate))
+	if errors.Is(err, tables.ErrOutOfScope) {
+		s.renderRecord(w, r, http.StatusUnprocessableEntity, t, p, rec, fields, err.Error()+" "+t.allowedText(tables.ActUpdate))
+		return
+	}
 	if errors.Is(err, tables.ErrNotFound) {
 		s.notFound(w, r)
 		return
@@ -329,10 +373,24 @@ func (s *Server) dataDelete(w http.ResponseWriter, r *http.Request) {
 		s.flashRedirect(w, r, "Zum Löschen bitte das Häkchen „wirklich löschen“ setzen.", recordURL(t.ID, rec.ID))
 		return
 	}
-	if err := s.tables.DeleteRecord(r.Context(), t, rec.ID); err != nil && !errors.Is(err, tables.ErrNotFound) {
+	if err := s.tables.DeleteRecord(r.Context(), t.Table, rec.ID, t.scope(tables.ActDelete)); err != nil && !errors.Is(err, tables.ErrNotFound) {
 		s.serverError(w, r, err)
 		return
 	}
 	s.auditDetail(r, 0, "record_deleted", t.Name+" Datensatz "+strconv.FormatInt(rec.ID, 10)+" durch "+CurrentUser(r.Context()).Username)
 	s.flashRedirect(w, r, "Datensatz "+strconv.FormatInt(rec.ID, 10)+" gelöscht.", dataURL(t.ID))
+}
+
+// allowedText beschreibt die Zeilenfilter für eine Aktion, z. B. „Erlaubt: Person ist gleich „{ich}““.
+func (d dataTable) allowedText(action string) string {
+	var parts []string
+	for _, g := range d.acc {
+		if g.Conds != nil && map[string]bool{tables.ActCreate: g.Perms.Create, tables.ActUpdate: g.Perms.Update, tables.ActDelete: g.Perms.Delete, tables.ActRead: g.Perms.Read}[action] {
+			parts = append(parts, tables.DescribeConds(d.Table, g.Conds))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Erlaubt: " + strings.Join(parts, " oder ") + "."
 }

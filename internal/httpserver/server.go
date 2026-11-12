@@ -86,6 +86,8 @@ func (s *Server) Handler() http.Handler {
 	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/runter", tbl(s.adminMoveColumnDown))
 	pages.HandleFunc("POST /admin/tabellen/{id}/spalten/{col}/loeschen", tbl(s.adminDeleteColumn))
 	pages.HandleFunc("POST /admin/tabellen/{id}/rechte", tbl(s.adminSetTablePerms))
+	pages.HandleFunc("POST /admin/tabellen/{id}/regeln", tbl(s.adminAddRule))
+	pages.HandleFunc("POST /admin/tabellen/{id}/regeln/{rule}/loeschen", tbl(s.adminDeleteRule))
 
 	// Datensätze: Rechte je Tabelle prüfen die Handler selbst
 	pages.HandleFunc("GET /daten", s.requireLogin(s.dataTables))

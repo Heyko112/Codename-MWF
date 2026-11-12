@@ -531,7 +531,7 @@ func (s *Server) adminSaveWidgetSettings(w http.ResponseWriter, r *http.Request)
 		s.errorRedirect(w, r, "Einstellungen nicht gespeichert. "+strings.Join(msgs, "; "), adminWidgetURL(wd.ID))
 		return
 	}
-	if err := s.tables.UpdateRecord(ctx, t, rec.ID, values, CurrentUser(ctx).ID); err != nil {
+	if err := s.tables.UpdateRecord(ctx, t, rec.ID, values, CurrentUser(ctx).ID, tables.AllRows); err != nil {
 		s.serverError(w, r, err)
 		return
 	}

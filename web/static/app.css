@@ -296,3 +296,9 @@ input.name-input { max-width: 320px; margin: 0; }
 .roles-pick .check { display: inline-flex; margin-right: 14px; }
 .todo { margin: 0 0 12px; padding-left: 20px; }
 .todo li { margin: 4px 0; }
+
+/* Zeilenfilter auf der Tabellen-Seite */
+fieldset.inline { display: flex; flex-wrap: wrap; gap: 4px 16px; padding-bottom: 8px; }
+fieldset.inline legend { width: 100%; }
+.cond-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.cond-row select, .cond-row input { flex: 1 1 160px; width: auto; margin: 0; }
