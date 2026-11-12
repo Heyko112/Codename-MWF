@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -92,7 +93,13 @@ func (s *Server) widgetCall(w http.ResponseWriter, r *http.Request) (any, error)
 	if len(call.Params) == 0 || string(call.Params) == "null" {
 		call.Params = json.RawMessage("{}")
 	}
+	return s.widgetMethod(r, wd, call)
+}
 
+// widgetMethod führt eine Methode der Daten-Brücke aus (aus dem Browser oder aus einem Server-Skript).
+func (s *Server) widgetMethod(r *http.Request, wd *widgets.Widget, call apiCall) (any, error) {
+	ctx := r.Context()
+	g, acc := CurrentAccess(ctx)
 	switch call.Method {
 	case "context":
 		u := CurrentUser(ctx)
@@ -139,18 +146,24 @@ func (s *Server) widgetCall(w http.ResponseWriter, r *http.Request) (any, error)
 		return s.apiRoles(r, wd)
 	case "list", "get", "create", "update", "delete":
 		return s.apiRecords(r, wd, call)
+	case "run":
+		return s.apiRun(r, wd, call.Params)
 	}
 	return nil, apiErr(http.StatusBadRequest, "bad_request", "Unbekannte Methode „"+call.Method+"“.")
 }
 
-// apiTables liefert alle angeforderten Tabellen mit den wirksamen Rechten.
+// apiTables liefert alle angeforderten Tabellen mit den wirksamen Rechten des Benutzers.
 func (s *Server) apiTables(r *http.Request, wd *widgets.Widget) ([]apiTable, error) {
-	ctx := r.Context()
-	grants, err := s.widgets.Grants(ctx, wd)
+	access, admin, err := s.tableAccess(r)
 	if err != nil {
 		return nil, err
 	}
-	access, admin, err := s.tableAccess(r)
+	return s.apiTablesFor(r.Context(), wd, access, admin)
+}
+
+// apiTablesFor liefert die angeforderten Tabellen mit den gegebenen Rechten ∩ Freigabe des Widgets.
+func (s *Server) apiTablesFor(ctx context.Context, wd *widgets.Widget, access map[int64]tables.Access, admin bool) ([]apiTable, error) {
+	grants, err := s.widgets.Grants(ctx, wd)
 	if err != nil {
 		return nil, err
 	}
@@ -293,14 +306,20 @@ func apiOrder(t *tables.Table, order string) ([]tables.Sort, error) {
 }
 
 func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (any, error) {
+	list, err := s.apiTables(r, wd)
+	if err != nil {
+		return nil, err
+	}
+	return s.recordCall(r, wd, call, list, "")
+}
+
+// recordCall führt list/get/create/update/delete auf den Tabellen in list aus.
+// via steht im Protokoll, z. B. " (Service-Rolle)".
+func (s *Server) recordCall(r *http.Request, wd *widgets.Widget, call apiCall, list []apiTable, via string) (any, error) {
 	ctx := r.Context()
 	var p recordParams
 	if err := json.Unmarshal(call.Params, &p); err != nil {
 		return nil, errAPIBadParams
-	}
-	list, err := s.apiTables(r, wd)
-	if err != nil {
-		return nil, err
 	}
 	var at *apiTable
 	for i := range list {
@@ -391,7 +410,7 @@ func (s *Server) apiRecords(r *http.Request, wd *widgets.Widget, call apiCall) (
 			return nil, err
 		}
 		s.auditDetail(r, 0, "record_deleted", t.Name+" Datensatz "+strconv.FormatInt(p.ID, 10)+" durch "+
-			CurrentUser(ctx).Username+" über Widget "+wd.Slug)
+			CurrentUser(ctx).Username+" über Widget "+wd.Slug+via)
 		return map[string]any{"deleted": p.ID}, nil
 	}
 }

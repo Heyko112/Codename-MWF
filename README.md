@@ -134,6 +134,37 @@ Geliefert werden nur aktive Benutzer, keine versteckten und keine Service-User. 
 
 **Grenze:** Die Abschottung schützt MWF vor dem Widget. Ein Widget sieht aber die Daten, die es lesen darf, und könnte seinen eigenen Rahmen auf eine fremde Seite umleiten. Nur Widgets aus vertrauenswürdiger Quelle installieren.
 
+### Server-Skripte
+
+Ein Widget kann Logik mitbringen, die im MWF-Server läuft statt im Browser (Ersatz für PHP-Dateien aus JobRouter). Die Skripte liegen im Paket unter `server/`, Startdatei ist `server/main.js` (JavaScript, ES2015+, CommonJS-Stil). Beim Hochladen prüft MWF, dass sie sich übersetzen lassen. An den Browser werden Dateien aus `server/` nie ausgeliefert.
+
+```js
+// server/main.js
+const regeln = require("./regeln.js");             // weitere Dateien aus server/
+exports.konto = function (params) {
+  const r = mwf.list("urlaub", { where: [{ col: "person", op: "eq", value: "{ich}" }] });
+  return { genommen: r.records.reduce((s, x) => s + x.values.tage, 0) };
+};
+```
+
+```js
+// im Widget
+const konto = await mwf.run("konto", { jahr: 2026 });
+```
+
+Im Skript gibt es nur das Objekt `mwf`, kein Dateisystem, kein Netz, keine direkte Datenbank:
+
+- `mwf.user` (`username`, `displayName`, `roles`), `mwf.widget` (`id`, `name`, `version`)
+- `mwf.list/get/create/update/remove`, `mwf.users`, `mwf.roles`, `mwf.settings` wie im Browser, synchron. Es gelten dieselben Rechte: Recht des Benutzers ∩ Freigabe des Widgets, inklusive Zeilenfilter.
+- `mwf.asService.list/get/create/update/remove/users/roles`: mit den Rechten der **Service-Rolle** des Widgets, ebenfalls nur innerhalb der Freigaben. Die Rolle setzt ein Verwalter auf der Widget-Seite unter „Server-Skripte“ (am besten eine eigene versteckte Rolle, „Administratoren“ ist nicht erlaubt). Ohne Service-Rolle meldet `asService` `forbidden`. Schreiben über die Service-Rolle steht im Audit-Log, `{ich}` und „angelegt von“ bleiben der aufrufende Benutzer.
+- `mwf.crypto.encrypt(text)` / `decrypt(wert)`: AES-256-GCM mit einem eigenen Schlüssel je Widget, abgeleitet aus `TOTP_KEY` (Wert beginnt mit `enc1:`). `mwf.crypto.hmac(text)`: Prüfsumme je Widget, z. B. für PINs.
+- `mwf.error("invalid", "Meldung")` bricht ab, das Widget bekommt `code` und `message`. Andere Ausnahmen kommen als Code `script`.
+- `console.log(...)` schreibt ins Log des Servers (`docker compose logs app`). Jeder Aufruf steht dort mit Dauer und Ergebnis.
+
+Grenzen: 5 Sekunden je Aufruf, 2000 Zugriffe auf `mwf`, Ergebnis höchstens 1 MB. Jeder Aufruf startet mit einer frischen Umgebung, nichts bleibt zwischen Aufrufen erhalten. Speicher ist nicht hart begrenzt, darum nur Widgets aus vertrauenswürdiger Quelle installieren.
+
+**Muster für geprüfte Eingaben:** Benutzer bekommen an der Tabelle nur Lesen (z. B. Zeilenfilter `Person = {ich}`), die Service-Rolle bekommt Anlegen. Dann kann niemand an der Prüfung im Skript vorbei direkt schreiben. Beispiel: `examples/widgets/urlaubskonto` (Resturlaub prüfen, dann über die Service-Rolle speichern).
+
 ### JobRouter-Widgets übernehmen
 
 Ein JobRouter-Dashboard-Widget (ZIP mit `dashboard/<Anbieter>/<Name>/<Name>.php`, `template.hbs`, `app/…`) lässt sich direkt hochladen. MWF erkennt die PHP-Klasse und baut daraus ein Paket: Titel aus `getTitle()`, Größe aus `getDimensions()`, Startseite ist die App aus `getData()` (`appUrl`) bzw. `app/index.html`, sonst wird `template.hbs` mit `style.css` zur Seite. PHP läuft nicht: Datenbankabfragen, `isAuthorized()`, Aufrufe von `.php`-Dateien oder der REST-API und Zugriffe über `window.frameElement` sowie `onclick=`-Attribute stehen als offene Punkte auf der Widget-Seite („Aus JobRouter übernommen“, im Manifest unter `import.hints`). Skripte direkt im HTML lagert MWF selbst in eigene `.js`-Dateien aus, weil Widgets nur Skriptdateien laden dürfen.

@@ -29,6 +29,9 @@ type Widget struct {
 	FileCount   int
 	TotalBytes  int64
 	RoleIDs     []int64
+	// Server-Skripte (E3): ob das Paket server/main.js hat, und die Service-Rolle für mwf.asService
+	HasScripts    bool
+	ServiceRoleID sql.NullInt64
 }
 
 // SizeLabel ist die Kachelgröße auf Deutsch.
@@ -44,13 +47,14 @@ const widgetColumns = `w.id, w.slug, w.name, w.version, w.description, w.size, w
 	w.installed_at, w.updated_at,
 	(SELECT COUNT(*) FROM widget_files f WHERE f.widget_id = w.id),
 	(SELECT COALESCE(SUM(LENGTH(f.data)), 0) FROM widget_files f WHERE f.widget_id = w.id),
-	COALESCE((SELECT GROUP_CONCAT(r.role_id) FROM widget_roles r WHERE r.widget_id = w.id), '')`
+	COALESCE((SELECT GROUP_CONCAT(r.role_id) FROM widget_roles r WHERE r.widget_id = w.id), ''),
+	EXISTS(SELECT 1 FROM widget_files f WHERE f.widget_id = w.id AND f.path = 'server/main.js'), w.service_role_id`
 
 func scanWidget(row interface{ Scan(...any) error }) (*Widget, error) {
 	var w Widget
 	var roles string
 	err := row.Scan(&w.ID, &w.Slug, &w.Name, &w.Version, &w.Description, &w.Size, &w.Entry, &w.Manifest, &w.Active,
-		&w.InstalledAt, &w.UpdatedAt, &w.FileCount, &w.TotalBytes, &roles)
+		&w.InstalledAt, &w.UpdatedAt, &w.FileCount, &w.TotalBytes, &roles, &w.HasScripts, &w.ServiceRoleID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -161,6 +165,16 @@ func (s *Store) SetRoles(ctx context.Context, widgetID int64, roleIDs []int64) e
 		}
 	}
 	return tx.Commit()
+}
+
+// SetServiceRole setzt die Service-Rolle (0 = keine).
+func (s *Store) SetServiceRole(ctx context.Context, widgetID, roleID int64) error {
+	var v any
+	if roleID > 0 {
+		v = roleID
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE widgets SET service_role_id = ? WHERE id = ?`, v, widgetID)
+	return err
 }
 
 func (s *Store) SetActive(ctx context.Context, widgetID int64, active bool) error {

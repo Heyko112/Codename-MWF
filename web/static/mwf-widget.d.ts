@@ -97,6 +97,9 @@ interface Mwf {
   users(options?: MwfUsersOptions): Promise<MwfUser[]>;
   /** alle nicht versteckten Rollen, nach Name. Braucht im Manifest "users": "read". */
   roles(): Promise<{ name: string; description: string }[]>;
+  /** ruft eine Funktion aus server/main.js des Pakets im Server auf und liefert ihr Ergebnis.
+   *  Fehler: Code aus mwf.error(code, …) im Skript, sonst script, timeout, forbidden … */
+  run<T = unknown>(name: string, params?: unknown): Promise<T>;
   /** neueste zuerst, wenn options.order fehlt. Nur Zeilen, die der Benutzer lesen darf. */
   list(table: string, options?: MwfListOptions): Promise<{ total: number; records: MwfRecord[] }>;
   get(table: string, id: number): Promise<MwfRecord>;

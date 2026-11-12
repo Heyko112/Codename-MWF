@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Urlaubskonto</title>
+<link rel="stylesheet" href="app.css">
+<script src="/static/mwf-widget.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<main>
+  <h1>Urlaubskonto</h1>
+  <p id="konto" class="status">Lade …</p>
+  <form id="neu" hidden>
+    <input id="tage" name="tage" type="number" min="1" max="60" placeholder="Tage" required>
+    <input id="bemerkung" name="bemerkung" placeholder="Bemerkung (optional)" autocomplete="off">
+    <button type="submit">Beantragen</button>
+  </form>
+  <p id="status" class="status" role="status" hidden></p>
+  <ul id="liste"></ul>
+</main>
+</body>
+</html>

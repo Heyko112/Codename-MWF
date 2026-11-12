@@ -1,0 +1,24 @@
+{
+  "id": "urlaubskonto",
+  "name": "Urlaubskonto",
+  "version": "1.0.0",
+  "description": "Beispiel für Server-Skripte: Urlaub beantragen, der Server prüft das Resturlaubs-Konto und speichert über die Service-Rolle.",
+  "size": "wide",
+  "entry": "index.html",
+  "tables": [
+    {
+      "alias": "urlaub",
+      "access": ["read", "create"],
+      "description": "Urlaubstage je Person. Mitarbeiter brauchen nur Lesen (Zeilenfilter Person = {ich}), Anlegen bekommt die Service-Rolle.",
+      "name": "Urlaub",
+      "columns": [
+        { "key": "person", "name": "Person", "type": "text", "size": 64, "required": true },
+        { "key": "tage", "name": "Tage", "type": "int", "required": true },
+        { "key": "bemerkung", "name": "Bemerkung", "type": "text", "size": 200 }
+      ]
+    }
+  ],
+  "settings": [
+    { "key": "jahresurlaub", "name": "Urlaubstage im Jahr", "type": "int", "required": true, "default": 30 }
+  ]
+}

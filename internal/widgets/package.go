@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Heyko112/codename-mwf/internal/scripts"
 	"github.com/Heyko112/codename-mwf/internal/tables"
 )
 
@@ -249,6 +250,13 @@ func Parse(data []byte) (*Package, error) {
 	pkg.Raw = string(mf.Data)
 	if err := pkg.check(); err != nil {
 		return nil, err
+	}
+	src := map[string][]byte{}
+	for p, f := range pkg.Files {
+		src[p] = f.Data
+	}
+	if err := scripts.Check(src); err != nil {
+		return nil, InputError(err.Error())
 	}
 	return pkg, nil
 }

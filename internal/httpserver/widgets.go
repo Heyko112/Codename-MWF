@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Heyko112/codename-mwf/internal/authz"
+	"github.com/Heyko112/codename-mwf/internal/scripts"
 	"github.com/Heyko112/codename-mwf/internal/tables"
 	"github.com/Heyko112/codename-mwf/internal/widgets"
 )
@@ -182,6 +183,10 @@ func (s *Server) widgetFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if !canSee(g, acc, wd) {
 		http.NotFound(w, r)
+		return
+	}
+	if strings.HasPrefix(r.PathValue("path"), scripts.Dir) {
+		http.NotFound(w, r) // Server-Skripte laufen nur im Server
 		return
 	}
 	ct, data, err := s.widgets.File(ctx, id, r.PathValue("path"))
@@ -378,6 +383,30 @@ func (s *Server) adminSetWidgetRoles(w http.ResponseWriter, r *http.Request) {
 	g, _ := CurrentAccess(r.Context())
 	s.auditDetail(r, 0, "widget_roles_changed", wd.Slug+" durch "+CurrentUser(r.Context()).Username+": "+strings.Join(g.PathNames(ids), ", "))
 	s.flashRedirect(w, r, "Sichtbarkeit von „"+wd.Name+"“ gespeichert.", adminWidgetURL(wd.ID))
+}
+
+// adminSetServiceRole setzt die Service-Rolle für mwf.asService in Server-Skripten.
+func (s *Server) adminSetServiceRole(w http.ResponseWriter, r *http.Request) {
+	wd, ok := s.loadAdminWidget(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	id, err := s.serviceRoleChoice(ctx, r.PostFormValue("role"))
+	if err != nil {
+		s.errorRedirect(w, r, err.Error(), adminWidgetURL(wd.ID))
+		return
+	}
+	if err := s.widgets.SetServiceRole(ctx, wd.ID, id); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	name := "keine"
+	if role, err := s.roles.RoleByID(ctx, id); err == nil {
+		name = role.Name
+	}
+	s.auditDetail(r, 0, "widget_service_role_changed", wd.Slug+" durch "+CurrentUser(ctx).Username+": "+name)
+	s.flashRedirect(w, r, "Service-Rolle von „"+wd.Name+"“: "+name+".", adminWidgetURL(wd.ID))
 }
 
 // adminSetWidgetTable ordnet einem angeforderten Alias eine Tabelle zu und gibt Rechte frei.
